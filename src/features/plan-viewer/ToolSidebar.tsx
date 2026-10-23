@@ -112,9 +112,10 @@ export default function ToolSidebar(props: Props) {
     onNextPlan,
   } = props
 
+  // Klik alat yang sedang aktif = matikan alat itu (kembali ke mode pilih)
   const pickTool = (next: Tool) => {
     onColorOpenChange(false)
-    onToolChange(next)
+    onToolChange(next === tool ? 'select' : next)
   }
 
   return (
