@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom'
 import { usePlans } from './usePlans'
 import { usePlanFolders, type PlanFolder } from './planFolders'
 import PlanUploadButton from './PlanUploadButton'
+import { compareFloors } from './floors'
+import { exportProjectExcel } from '../export/exportProjectExcel'
 import { useTranslation } from '../../i18n/LanguageContext'
 import type { Plan } from '../../types/models'
 
@@ -63,7 +65,7 @@ function ChevronDown({ className = 'h-3.5 w-3.5' }: { className?: string }) {
 
 export default function PlanListPage() {
   const { projectId } = useParams<{ projectId: string }>()
-  const { plans, loading, uploading, uploadPlan, deletePlan } = usePlans(projectId)
+  const { plans, loading, uploading, uploadPlan, deletePlan, setPlansFloor } = usePlans(projectId)
   const {
     folders,
     assignments,
@@ -84,7 +86,43 @@ export default function PlanListPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [openMenu, setOpenMenu] = useState<string | null>(null)
 
+  const [exporting, setExporting] = useState<string | null>(null)
+
   const closeMenu = () => setOpenMenu(null)
+
+  const existingFloors = useMemo(
+    () => [...new Set(plans.map((p) => p.floor?.trim() ?? '').filter(Boolean))].sort(compareFloors),
+    [plans],
+  )
+
+  const onExport = async (withPhotos: boolean) => {
+    closeMenu()
+    if (!projectId) return
+    setExporting(t('export.exporting'))
+    try {
+      await exportProjectExcel(projectId, t, {
+        withPhotos,
+        onProgress: (done, total) => setExporting(t('export.photoProgress', { done, total })),
+      })
+    } catch (e) {
+      window.alert(t('export.failed', { error: (e as Error).message }))
+    } finally {
+      setExporting(null)
+    }
+  }
+
+  const onSetFloorSelected = async () => {
+    closeMenu()
+    if (selected.size === 0) {
+      window.alert(t('plans.selectPlansFirst'))
+      return
+    }
+    const current = plans.find((p) => selected.has(p.id))?.floor ?? ''
+    const floor = window.prompt(t('plans.floorPrompt', { count: selected.size }), current)
+    if (floor === null) return
+    await setPlansFloor([...selected], floor.trim())
+    setSelected(new Set())
+  }
 
   const visiblePlans = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -176,8 +214,8 @@ export default function PlanListPage() {
 
   const uploadInto =
     (folderId: string | null) =>
-    async (name: string, file: File) => {
-      const newId = await uploadPlan(name, file)
+    async (name: string, file: File, floor: string) => {
+      const newId = await uploadPlan(name, file, floor)
       if (newId && folderId) movePlans([newId], folderId)
     }
 
@@ -244,7 +282,32 @@ export default function PlanListPage() {
 
       {/* Toolbar utama ala Fieldwire */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <PlanUploadButton uploading={uploading} onUpload={uploadInto(null)} />
+        <PlanUploadButton uploading={uploading} onUpload={uploadInto(null)} existingFloors={existingFloors} />
+
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setOpenMenu(openMenu === 'export' ? null : 'export')}
+            disabled={!!exporting || plans.length === 0}
+            className="flex items-center gap-1.5 rounded-lg bg-green-700 px-3.5 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-50"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+            </svg>
+            {exporting ?? t('export.button')}
+            {!exporting && <ChevronDown />}
+          </button>
+          <Dropdown open={openMenu === 'export'} onClose={closeMenu}>
+            <MenuItem onClick={() => onExport(true)}>
+              <span className="block font-medium">{t('export.withPhotos')}</span>
+              <span className="block text-xs text-slate-400">{t('export.withPhotosHelp')}</span>
+            </MenuItem>
+            <MenuItem onClick={() => onExport(false)}>
+              <span className="block font-medium">{t('export.withoutPhotos')}</span>
+              <span className="block text-xs text-slate-400">{t('export.withoutPhotosHelp')}</span>
+            </MenuItem>
+          </Dropdown>
+        </div>
 
         <button
           type="button"
@@ -274,6 +337,8 @@ export default function PlanListPage() {
               </MenuItem>
             ))}
             <MenuItem onClick={() => onMoveSelected(null)}>{t('plans.moveToUnfiled')}</MenuItem>
+            <div className="my-1 border-t border-slate-100" />
+            <MenuItem onClick={onSetFloorSelected}>{t('plans.setFloor', { count: selected.size })}</MenuItem>
             <div className="my-1 border-t border-slate-100" />
             <MenuItem danger onClick={onDeleteSelected}>
               {t('plans.deleteSelected', { count: selected.size })}
@@ -454,7 +519,10 @@ export default function PlanListPage() {
                           }`}
                         >
                           <img src={plan.imageURL} alt={plan.name} className="aspect-square w-full object-cover" />
-                          <span className="block truncate p-2 text-sm font-medium text-slate-900">{plan.name}</span>
+                          <span className="block truncate px-2 pt-2 text-sm font-medium text-slate-900">{plan.name}</span>
+                          <span className={`block truncate px-2 pb-2 text-xs ${plan.floor ? 'text-blue-700' : 'text-slate-400'}`}>
+                            {plan.floor || t('export.noFloor')}
+                          </span>
                         </Link>
                         <input
                           type="checkbox"
@@ -469,6 +537,7 @@ export default function PlanListPage() {
                       <PlanUploadButton
                         uploading={uploading}
                         onUpload={uploadInto(folder ? folder.id : null)}
+                        existingFloors={existingFloors}
                         variant="tile"
                       />
                     </li>
@@ -490,6 +559,11 @@ export default function PlanListPage() {
                         >
                           <img src={plan.imageURL} alt="" className="h-10 w-10 rounded object-cover" />
                           <span className="truncate text-sm font-medium text-slate-900">{plan.name}</span>
+                          {plan.floor && (
+                            <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                              {plan.floor}
+                            </span>
+                          )}
                           <span className="ml-auto shrink-0 text-xs text-slate-400">
                             {createdMs(plan) ? new Date(createdMs(plan)).toLocaleDateString() : ''}
                           </span>
