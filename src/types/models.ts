@@ -23,6 +23,8 @@ export interface Plan {
   imageHeight: number
   createdBy: string
   createdAt: number
+  // Keterangan lantai (mis. "Ground Floor", "Lantai 2"); dipakai untuk rekap Excel per lantai
+  floor?: string
 }
 
 export interface Pin {

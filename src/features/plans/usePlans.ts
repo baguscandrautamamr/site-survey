@@ -8,6 +8,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  writeBatch,
 } from 'firebase/firestore'
 import imageCompression from 'browser-image-compression'
 import { db } from '../../firebase/config'
@@ -50,7 +51,7 @@ export function usePlans(projectId: string | undefined) {
     return unsub
   }, [projectId])
 
-  const uploadPlan = async (name: string, file: File) => {
+  const uploadPlan = async (name: string, file: File, floor = '') => {
     if (!projectId || !user) throw new Error('Missing project or user')
     setUploading(true)
     try {
@@ -76,6 +77,7 @@ export function usePlans(projectId: string | undefined) {
       await setDoc(planRef, {
         projectId,
         name,
+        floor,
         imagePath,
         imageURL,
         imageWidth: width,
@@ -94,5 +96,14 @@ export function usePlans(projectId: string | undefined) {
     await deleteDoc(doc(db, 'projects', projectId, 'plans', planId))
   }
 
-  return { plans, loading, uploading, uploadPlan, deletePlan }
+  const setPlansFloor = async (planIds: string[], floor: string) => {
+    if (!projectId) throw new Error('Missing project')
+    const batch = writeBatch(db)
+    for (const planId of planIds) {
+      batch.update(doc(db, 'projects', projectId, 'plans', planId), { floor })
+    }
+    await batch.commit()
+  }
+
+  return { plans, loading, uploading, uploadPlan, deletePlan, setPlansFloor }
 }

@@ -1,34 +1,41 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from '../../i18n/LanguageContext'
+import { FLOOR_SUGGESTIONS, guessFloorFromName } from './floors'
 
 interface Props {
   uploading: boolean
-  onUpload: (name: string, file: File) => Promise<void>
+  onUpload: (name: string, file: File, floor: string) => Promise<void>
   variant?: 'primary' | 'tile'
+  // Lantai yang sudah dipakai di proyek ini, ditawarkan sebagai pilihan cepat
+  existingFloors?: string[]
 }
 
-export default function PlanUploadButton({ uploading, onUpload, variant = 'primary' }: Props) {
+export default function PlanUploadButton({ uploading, onUpload, variant = 'primary', existingFloors = [] }: Props) {
   const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [name, setName] = useState('')
+  const [floor, setFloor] = useState('')
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setPendingFile(file)
-    setName(file.name.replace(/\.[^/.]+$/, ''))
+    const baseName = file.name.replace(/\.[^/.]+$/, '')
+    setName(baseName)
+    setFloor(guessFloorFromName(baseName))
   }
 
   const reset = () => {
     setPendingFile(null)
     setName('')
+    setFloor('')
     if (inputRef.current) inputRef.current.value = ''
   }
 
   const onConfirm = async () => {
     if (!pendingFile || !name.trim()) return
-    await onUpload(name.trim(), pendingFile)
+    await onUpload(name.trim(), pendingFile, floor.trim())
     reset()
   }
 
@@ -73,6 +80,22 @@ export default function PlanUploadButton({ uploading, onUpload, variant = 'prima
               placeholder={t('plans.namePlaceholder')}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base text-slate-900 focus:border-slate-900 focus:outline-none dark:bg-slate-700 dark:text-white"
             />
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 dark:text-slate-300">
+              {t('plans.floor')}
+              <input
+                value={floor}
+                onChange={(e) => setFloor(e.target.value)}
+                list="plan-floor-options"
+                placeholder={t('plans.floorPlaceholder')}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base font-normal text-slate-900 focus:border-slate-900 focus:outline-none dark:bg-slate-700 dark:text-white"
+              />
+              <datalist id="plan-floor-options">
+                {[...new Set([...existingFloors, ...FLOOR_SUGGESTIONS])].map((f) => (
+                  <option key={f} value={f} />
+                ))}
+              </datalist>
+              <span className="text-xs font-normal text-slate-400">{t('plans.floorHelp')}</span>
+            </label>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
