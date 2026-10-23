@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAllUsers, useAllProjects, useAllPhotos } from './useAdminData'
 import { useTranslation } from '../../i18n/LanguageContext'
+import { auth } from '../../firebase/config'
 
 interface CloudinaryUsage {
   plan: string
@@ -83,7 +84,13 @@ export default function AdminStoragePage() {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 30000)
 
-    fetch('/api/cloudinary-usage', { signal: controller.signal })
+    Promise.resolve(auth.currentUser?.getIdToken())
+      .then((idToken) =>
+        fetch('/api/cloudinary-usage', {
+          signal: controller.signal,
+          headers: idToken ? { Authorization: `Bearer ${idToken}` } : {},
+        }),
+      )
       .then(async (res) => {
         const text = await res.text()
         let data: Record<string, unknown>

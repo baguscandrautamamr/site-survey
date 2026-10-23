@@ -30,11 +30,13 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/firebasestorage\.googleapis\.com\/.*/i,
+            // Photos and plan images are uploaded to Cloudinary (src/lib/cloudinary.ts).
+            urlPattern: /^https:\/\/res\.cloudinary\.com\/.*/i,
             handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'firebase-storage-images',
+              cacheName: 'cloudinary-images',
               expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
             },
           },
         ],
