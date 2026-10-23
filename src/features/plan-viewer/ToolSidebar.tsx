@@ -148,6 +148,17 @@ export default function ToolSidebar(props: Props) {
         </Icon>
       </ToolButton>
 
+      <ToolButton
+        label={t('planViewer.tool.addAsset')}
+        active={tool === 'asset'}
+        onClick={() => pickTool('asset')}
+      >
+        <Icon>
+          <path d="M21 8 12 3 3 8v8l9 5 9-5Z" />
+          <path d="M3 8l9 5 9-5M12 13v8" />
+        </Icon>
+      </ToolButton>
+
       <div className="relative">
         <ToolButton
           label={t('planViewer.tool.pen')}

@@ -44,12 +44,19 @@ export async function drainQueue() {
         )
         await updateDoc(
           doc(db, 'projects', item.projectId, 'plans', item.planId, 'pins', item.pinId),
-          {
-            photoPath,
-            photoURL,
-            localPhotoPending: false,
-            updatedAt: serverTimestamp(),
-          },
+          item.field === 'countPhoto'
+            ? {
+                countPhotoPath: photoPath,
+                countPhotoURL: photoURL,
+                localCountPhotoPending: false,
+                updatedAt: serverTimestamp(),
+              }
+            : {
+                photoPath,
+                photoURL,
+                localPhotoPending: false,
+                updatedAt: serverTimestamp(),
+              },
         )
         await deletePendingPhoto(item.id)
       } catch (err) {

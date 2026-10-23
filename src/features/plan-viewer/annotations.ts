@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 // Alat gambar ala Fieldwire. Anotasi disimpan di localStorage per denah
 // (bukan di Firestore) sehingga skema database tidak berubah.
-export type Tool = 'select' | 'pin' | 'pen' | 'shape' | 'text' | 'measure'
+export type Tool = 'select' | 'pin' | 'asset' | 'pen' | 'shape' | 'text' | 'measure'
 export type PenVariant = 'freehand' | 'line' | 'arrow'
 export type ShapeVariant =
   | 'cloud'

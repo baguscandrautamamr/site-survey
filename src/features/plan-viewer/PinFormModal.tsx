@@ -1,18 +1,13 @@
 import { useState } from 'react'
-import imageCompression from 'browser-image-compression'
-import { uploadToCloudinary } from '../../lib/cloudinary'
-import { queuePhoto } from '../sync/syncManager'
+import { compressPhoto, savePinPhoto } from '../sync/savePinPhoto'
 import { useCategories } from '../categories/useCategories'
 import { useTranslation } from '../../i18n/LanguageContext'
-import type { Pin, PinStatus } from '../../types/models'
+import type { Pin, PinStatus, PinUpdate } from '../../types/models'
 
 interface Props {
   pin: Pin
   onClose: () => void
-  onUpdate: (
-    pinId: string,
-    data: Partial<Pick<Pin, 'status' | 'category' | 'notes' | 'photoPath' | 'photoURL' | 'localPhotoPending'>>,
-  ) => Promise<void>
+  onUpdate: (pinId: string, data: PinUpdate) => Promise<void>
 }
 
 const STATUSES: PinStatus[] = ['open', 'in_progress', 'done']
@@ -43,43 +38,8 @@ export default function PinFormModal({ pin, onClose, onUpdate }: Props) {
     setLocalPreview(URL.createObjectURL(file))
     setUploadingPhoto(true)
     try {
-      const compressed = await imageCompression(file, {
-        maxWidthOrHeight: 1600,
-        maxSizeMB: 1,
-        useWebWorker: true,
-      })
-
-      if (!navigator.onLine) {
-        await queuePhoto({
-          projectId: pin.projectId,
-          planId: pin.planId,
-          pinId: pin.id,
-          blob: compressed,
-          fileName: file.name,
-          contentType: compressed.type,
-        })
-        await onUpdate(pin.id, { localPhotoPending: true })
-        return
-      }
-
-      try {
-        const { url: photoURL, publicId: photoPath } = await uploadToCloudinary(
-          compressed,
-          `pin-${pin.id}-${file.name}`,
-        )
-        await onUpdate(pin.id, { photoPath, photoURL, localPhotoPending: false })
-      } catch {
-        // Upload failed (e.g. lost connection mid-upload) — fall back to the offline queue.
-        await queuePhoto({
-          projectId: pin.projectId,
-          planId: pin.planId,
-          pinId: pin.id,
-          blob: compressed,
-          fileName: file.name,
-          contentType: compressed.type,
-        })
-        await onUpdate(pin.id, { localPhotoPending: true })
-      }
+      const compressed = await compressPhoto(file)
+      await savePinPhoto(pin, compressed, file.name, 'photo', onUpdate)
     } finally {
       setUploadingPhoto(false)
     }

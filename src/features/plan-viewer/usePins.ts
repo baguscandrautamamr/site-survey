@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import { useAuth } from '../auth/useAuth'
-import type { Pin, PinStatus } from '../../types/models'
+import type { Pin, PinKind, PinStatus, PinUpdate } from '../../types/models'
 
 export function usePins(projectId: string | undefined, planId: string | undefined) {
   const { user } = useAuth()
@@ -37,7 +37,7 @@ export function usePins(projectId: string | undefined, planId: string | undefine
     return unsub
   }, [projectId, planId])
 
-  const createPin = async (x: number, y: number) => {
+  const createPin = async (x: number, y: number, kind: PinKind = 'finding') => {
     if (!projectId || !planId || !user) throw new Error('Missing context')
     const pinRef = doc(collection(db, 'projects', projectId, 'plans', planId, 'pins'))
     const pin: Omit<Pin, 'id'> = {
@@ -55,6 +55,18 @@ export function usePins(projectId: string | undefined, planId: string | undefine
       createdByName: user.email ?? '',
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      kind,
+      ...(kind === 'asset' && {
+        assetType: '',
+        quantity: 0,
+        damaged: 0,
+        missing: 0,
+        countSource: 'manual' as const,
+        countPoints: [],
+        countPhotoPath: null,
+        countPhotoURL: null,
+        localCountPhotoPending: false,
+      }),
     }
     // Offline-first: jangan tunggu konfirmasi server — snapshot lokal langsung
     // menampilkan pin, dan modal detail bisa langsung terbuka meski koneksi lambat.
@@ -64,10 +76,7 @@ export function usePins(projectId: string | undefined, planId: string | undefine
     return pinRef.id
   }
 
-  const updatePin = async (
-    pinId: string,
-    data: Partial<Pick<Pin, 'status' | 'category' | 'notes' | 'photoPath' | 'photoURL' | 'localPhotoPending'>>,
-  ) => {
+  const updatePin = async (pinId: string, data: PinUpdate) => {
     if (!projectId || !planId) throw new Error('Missing context')
     await updateDoc(doc(db, 'projects', projectId, 'plans', planId, 'pins', pinId), {
       ...data,

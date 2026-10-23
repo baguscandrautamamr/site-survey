@@ -46,6 +46,8 @@ export function useProjectPins(projectId: string | undefined) {
     () =>
       Object.values(pinsByPlan)
         .flat()
+        // Pin aset bukan tugas; hanya temuan yang tampil di papan tugas
+        .filter((p) => p.kind !== 'asset')
         .sort((a, b) => toMs(a.createdAt) - toMs(b.createdAt)),
     [pinsByPlan],
   )
