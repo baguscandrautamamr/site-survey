@@ -86,7 +86,7 @@ export default function PlanListPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [openMenu, setOpenMenu] = useState<string | null>(null)
 
-  const [exporting, setExporting] = useState(false)
+  const [exporting, setExporting] = useState<string | null>(null)
 
   const closeMenu = () => setOpenMenu(null)
 
@@ -95,15 +95,19 @@ export default function PlanListPage() {
     [plans],
   )
 
-  const onExport = async () => {
+  const onExport = async (withPhotos: boolean) => {
+    closeMenu()
     if (!projectId) return
-    setExporting(true)
+    setExporting(t('export.exporting'))
     try {
-      await exportProjectExcel(projectId, t)
+      await exportProjectExcel(projectId, t, {
+        withPhotos,
+        onProgress: (done, total) => setExporting(t('export.photoProgress', { done, total })),
+      })
     } catch (e) {
       window.alert(t('export.failed', { error: (e as Error).message }))
     } finally {
-      setExporting(false)
+      setExporting(null)
     }
   }
 
@@ -280,17 +284,30 @@ export default function PlanListPage() {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <PlanUploadButton uploading={uploading} onUpload={uploadInto(null)} existingFloors={existingFloors} />
 
-        <button
-          type="button"
-          onClick={onExport}
-          disabled={exporting || plans.length === 0}
-          className="flex items-center gap-1.5 rounded-lg bg-green-700 px-3.5 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-50"
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
-          </svg>
-          {exporting ? t('export.exporting') : t('export.button')}
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setOpenMenu(openMenu === 'export' ? null : 'export')}
+            disabled={!!exporting || plans.length === 0}
+            className="flex items-center gap-1.5 rounded-lg bg-green-700 px-3.5 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-50"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+            </svg>
+            {exporting ?? t('export.button')}
+            {!exporting && <ChevronDown />}
+          </button>
+          <Dropdown open={openMenu === 'export'} onClose={closeMenu}>
+            <MenuItem onClick={() => onExport(true)}>
+              <span className="block font-medium">{t('export.withPhotos')}</span>
+              <span className="block text-xs text-slate-400">{t('export.withPhotosHelp')}</span>
+            </MenuItem>
+            <MenuItem onClick={() => onExport(false)}>
+              <span className="block font-medium">{t('export.withoutPhotos')}</span>
+              <span className="block text-xs text-slate-400">{t('export.withoutPhotosHelp')}</span>
+            </MenuItem>
+          </Dropdown>
+        </div>
 
         <button
           type="button"

@@ -20,6 +20,23 @@ const HEADER_FILL = { type: 'pattern' as const, pattern: 'solid' as const, fgCol
 const TITLE_FONT = { bold: true, size: 14 }
 const DATE_FORMAT = 'dd/mm/yyyy hh:mm'
 
+// Foto yang akan ditempel ke sel setelah semua sheet selesai dibuat
+interface PhotoSlot {
+  ws: Worksheet
+  row: number
+  col: number
+  url: string
+}
+
+export interface ExportOptions {
+  withPhotos: boolean
+  onProgress?: (done: number, total: number) => void
+}
+
+const PHOTO_PX = 120
+const PHOTO_ROW_HEIGHT_PT = 95
+const PHOTO_COL_WIDTH = 18
+
 const good = (pin: Pin) => Math.max(0, (pin.quantity ?? 0) - (pin.damaged ?? 0) - (pin.missing ?? 0))
 
 // Nama sheet Excel: maks 31 karakter, tanpa : \ / ? * [ ], dan harus unik
@@ -36,6 +53,9 @@ function sheetName(raw: string, used: Set<string>) {
 
 function addTable(ws: Worksheet, startRow: number, headers: string[], rows: unknown[][]) {
   const header = ws.getRow(startRow)
+  // Tinggi eksplisit: header yang terbungkus (wrap) tidak di-autofit berbeda-beda
+  // antar aplikasi, sehingga posisi foto di baris bawahnya tidak bergeser
+  header.height = 30
   headers.forEach((h, i) => {
     const cell = header.getCell(i + 1)
     cell.value = h
@@ -61,6 +81,66 @@ function addTable(ws: Worksheet, startRow: number, headers: string[], rows: unkn
 }
 
 const link = (url: string | null | undefined, text: string) => (url ? { text, hyperlink: url } : '')
+
+// Isi sel foto: link kalau ada URL, keterangan kalau foto masih di antrean offline
+function photoCell(url: string | null | undefined, pending: boolean | undefined, t: T) {
+  if (url) return link(url, t('export.openPhoto'))
+  return pending ? t('export.photoPending') : ''
+}
+
+// Versi kecil dari Cloudinary supaya file Excel tidak membengkak
+export function thumbnailUrl(url: string) {
+  return url.includes('/upload/') ? url.replace('/upload/', '/upload/f_jpg,c_limit,w_480,h_480,q_70/') : url
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(',')[1] ?? '')
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function fetchPhoto(url: string) {
+  const res = await fetch(thumbnailUrl(url))
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const blob = await res.blob()
+  const extension = blob.type.includes('png') ? 'png' : blob.type.includes('gif') ? 'gif' : 'jpeg'
+  const bitmap = await createImageBitmap(blob)
+  const size = { width: bitmap.width, height: bitmap.height }
+  bitmap.close()
+  return { base64: await blobToBase64(blob), extension: extension as 'png' | 'gif' | 'jpeg', size }
+}
+
+async function embedPhotos(wb: Workbook, slots: PhotoSlot[], onProgress?: ExportOptions['onProgress']) {
+  let done = 0
+  onProgress?.(0, slots.length)
+  const queue = [...slots]
+  const worker = async () => {
+    for (let slot = queue.shift(); slot; slot = queue.shift()) {
+      try {
+        const photo = await fetchPhoto(slot.url)
+        const scale = Math.min(PHOTO_PX / photo.size.width, PHOTO_PX / photo.size.height, 1)
+        const imageId = wb.addImage({ base64: photo.base64, extension: photo.extension })
+        // Gambar menggantikan teks link di sel; klik gambar membuka foto ukuran penuh
+        slot.ws.getCell(slot.row, slot.col).value = null
+        slot.ws.getRow(slot.row).height = PHOTO_ROW_HEIGHT_PT
+        slot.ws.getColumn(slot.col).width = PHOTO_COL_WIDTH
+        slot.ws.addImage(imageId, {
+          tl: { col: slot.col - 1 + 0.05, row: slot.row - 1 + 0.05 },
+          ext: { width: photo.size.width * scale, height: photo.size.height * scale },
+          hyperlinks: { hyperlink: slot.url, tooltip: slot.url },
+        })
+      } catch (err) {
+        // Foto gagal diunduh: biarkan link teks "Lihat foto" di sel
+        console.error('Gagal mengambil foto untuk Excel:', slot.url, err)
+      }
+      onProgress?.(++done, slots.length)
+    }
+  }
+  await Promise.all(Array.from({ length: 4 }, worker))
+}
 
 async function loadProject(projectId: string, noFloorLabel: string) {
   const projectSnap = await getDoc(doc(db, 'projects', projectId))
@@ -169,7 +249,7 @@ function addAssetRecapSheet(wb: Workbook, name: string, floors: FloorData[], t: 
   ws.views = [{ state: 'frozen', ySplit: 1 }]
 }
 
-function addFloorSheet(wb: Workbook, name: string, f: FloorData, t: T) {
+function addFloorSheet(wb: Workbook, name: string, f: FloorData, t: T, photos: PhotoSlot[] | null) {
   const ws = wb.addWorksheet(name)
   ws.getCell('A1').value = f.label
   ws.getCell('A1').font = TITLE_FONT
@@ -185,8 +265,11 @@ function addFloorSheet(wb: Workbook, name: string, f: FloorData, t: T) {
     pin.notes,
     pin.createdByName,
     toMs(pin.createdAt) ? new Date(toMs(pin.createdAt)) : null,
-    link(pin.photoURL, t('export.openPhoto')),
+    photoCell(pin.photoURL, pin.localPhotoPending, t),
   ])
+  f.findings.forEach(({ pin }, i) => {
+    if (photos && pin.photoURL) photos.push({ ws, row: 6 + i, col: 8, url: pin.photoURL })
+  })
   let row = addTable(
     ws,
     5,
@@ -218,9 +301,14 @@ function addFloorSheet(wb: Workbook, name: string, f: FloorData, t: T) {
     pin.notes,
     pin.createdByName,
     toMs(pin.createdAt) ? new Date(toMs(pin.createdAt)) : null,
-    link(pin.photoURL, t('export.openPhoto')),
-    link(pin.countPhotoURL, t('export.openPhoto')),
+    photoCell(pin.photoURL, pin.localPhotoPending, t),
+    photoCell(pin.countPhotoURL, pin.localCountPhotoPending, t),
   ])
+  f.assets.forEach(({ pin }, i) => {
+    if (!photos) return
+    if (pin.photoURL) photos.push({ ws, row: row + 2 + i, col: 12, url: pin.photoURL })
+    if (pin.countPhotoURL) photos.push({ ws, row: row + 2 + i, col: 13, url: pin.countPhotoURL })
+  })
   addTable(
     ws,
     row + 1,
@@ -248,7 +336,7 @@ function addFloorSheet(wb: Workbook, name: string, f: FloorData, t: T) {
 
 // Rekap seluruh proyek ke Excel: Ringkasan, Rekap Aset, lalu satu sheet per lantai
 // berisi temuan & aset dari semua denah di lantai tersebut.
-export async function exportProjectExcel(projectId: string, t: T) {
+export async function exportProjectExcel(projectId: string, t: T, { withPhotos, onProgress }: ExportOptions) {
   const [{ default: ExcelJS }, { projectName, floors }] = await Promise.all([
     import('exceljs'),
     loadProject(projectId, t('export.noFloor')),
@@ -259,7 +347,9 @@ export async function exportProjectExcel(projectId: string, t: T) {
   const used = new Set<string>()
   addSummarySheet(wb, sheetName(t('export.sheetSummary'), used), projectName, floors, t)
   addAssetRecapSheet(wb, sheetName(t('export.sheetAssets'), used), floors, t)
-  for (const f of floors) addFloorSheet(wb, sheetName(f.label, used), f, t)
+  const photos: PhotoSlot[] | null = withPhotos ? [] : null
+  for (const f of floors) addFloorSheet(wb, sheetName(f.label, used), f, t, photos)
+  if (photos?.length) await embedPhotos(wb, photos, onProgress)
 
   const buffer = await wb.xlsx.writeBuffer()
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
