@@ -16,8 +16,7 @@ import { db } from '../../firebase/config'
 import type { AssetType } from '../../types/models'
 
 export const DEFAULT_ASSET_TYPES: Array<{ id: string; name: string }> = [
-  { id: 'default-downlight', name: 'Lampu downlight' },
-  { id: 'default-tl', name: 'Lampu TL' },
+  { id: 'default-lampu', name: 'Lampu' },
   { id: 'default-socket', name: 'Stop kontak' },
   { id: 'default-switch', name: 'Saklar' },
   { id: 'default-smoke', name: 'Smoke detector' },
