@@ -12,6 +12,9 @@ interface Props {
   onDelete: (pinId: string) => Promise<void>
 }
 
+// Nilai option "Lainnya" — memicu prompt untuk mengetik jenis aset sendiri
+const CUSTOM_TYPE = '__custom__'
+
 interface CountPhotoDraft {
   src: string
   blob: Blob
@@ -79,7 +82,7 @@ function Section({ title, children }: { title?: string; children: React.ReactNod
 
 export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Props) {
   const { t } = useTranslation()
-  const { assetTypes } = useAssetTypes()
+  const { assetTypes } = useAssetTypes({ fallbackToDefaults: true })
   const [assetType, setAssetType] = useState(pin.assetType ?? '')
   const [quantity, setQuantity] = useState(pin.quantity ?? 0)
   const [damaged, setDamaged] = useState(pin.damaged ?? 0)
@@ -197,7 +200,14 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
           <Section title={t('assetForm.assetType')}>
             <select
               value={assetType}
-              onChange={(e) => setAssetType(e.target.value)}
+              onChange={(e) => {
+                if (e.target.value !== CUSTOM_TYPE) {
+                  setAssetType(e.target.value)
+                  return
+                }
+                const custom = window.prompt(t('assetForm.customTypePrompt'))?.trim()
+                if (custom) setAssetType(custom)
+              }}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 focus:border-slate-900 focus:outline-none dark:border-slate-600 dark:bg-slate-700 dark:text-white"
             >
               <option value="">{t('assetForm.pickAssetType')}</option>
@@ -206,6 +216,7 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
                   {name}
                 </option>
               ))}
+              <option value={CUSTOM_TYPE}>{t('assetForm.customType')}</option>
             </select>
           </Section>
 
