@@ -9,6 +9,7 @@ export default function AdminLayout() {
     { to: '/admin/projects', label: t('admin.tabProjects') },
     { to: '/admin/photos', label: t('admin.tabPhotos') },
     { to: '/admin/categories', label: t('admin.tabCategories') },
+    { to: '/admin/asset-types', label: t('admin.tabAssetTypes') },
     { to: '/admin/storage', label: t('admin.tabStorage') },
   ]
 

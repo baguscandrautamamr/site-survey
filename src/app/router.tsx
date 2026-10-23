@@ -12,6 +12,7 @@ import AdminUsersPage from '../features/admin/AdminUsersPage'
 import AdminProjectsPage from '../features/admin/AdminProjectsPage'
 import AdminPhotosPage from '../features/admin/AdminPhotosPage'
 import AdminCategoriesPage from '../features/admin/AdminCategoriesPage'
+import AdminAssetTypesPage from '../features/admin/AdminAssetTypesPage'
 import AdminStoragePage from '../features/admin/AdminStoragePage'
 
 export const router = createBrowserRouter([
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
               { path: 'projects', element: <AdminProjectsPage /> },
               { path: 'photos', element: <AdminPhotosPage /> },
               { path: 'categories', element: <AdminCategoriesPage /> },
+              { path: 'asset-types', element: <AdminAssetTypesPage /> },
               { path: 'storage', element: <AdminStoragePage /> },
             ],
           },

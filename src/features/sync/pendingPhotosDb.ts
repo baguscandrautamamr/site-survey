@@ -9,7 +9,11 @@ export interface PendingPhotoRecord {
   fileName: string
   contentType: string
   createdAt: number
+  // Field pin yang diisi saat sync. Record lama tanpa field ini = foto temuan biasa.
+  field?: PinPhotoField
 }
+
+export type PinPhotoField = 'photo' | 'countPhoto'
 
 const DB_NAME = 'survey-pending-photos'
 const STORE_NAME = 'photos'

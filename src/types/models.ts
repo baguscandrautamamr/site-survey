@@ -1,4 +1,8 @@
 export type PinStatus = 'open' | 'in_progress' | 'done'
+// 'finding' = temuan (punch list), 'asset' = inventaris aset dengan jumlah & kondisi.
+// Pin lama tanpa field kind dianggap 'finding'.
+export type PinKind = 'finding' | 'asset'
+export type CountSource = 'ai' | 'manual'
 export type UserRole = 'admin' | 'member'
 
 export interface Project {
@@ -37,6 +41,50 @@ export interface Pin {
   createdByName: string
   createdAt: number
   updatedAt: number
+  kind?: PinKind
+  // Field khusus pin aset
+  assetType?: string
+  quantity?: number
+  damaged?: number
+  missing?: number
+  countSource?: CountSource
+  // Titik objek yang dihitung, dinormalisasi 0..1 terhadap foto hitung
+  countPoints?: CountPoint[]
+  countPhotoPath?: string | null
+  countPhotoURL?: string | null
+  localCountPhotoPending?: boolean
+}
+
+export interface CountPoint {
+  x: number
+  y: number
+}
+
+export type PinUpdate = Partial<
+  Pick<
+    Pin,
+    | 'status'
+    | 'category'
+    | 'notes'
+    | 'photoPath'
+    | 'photoURL'
+    | 'localPhotoPending'
+    | 'assetType'
+    | 'quantity'
+    | 'damaged'
+    | 'missing'
+    | 'countSource'
+    | 'countPoints'
+    | 'countPhotoPath'
+    | 'countPhotoURL'
+    | 'localCountPhotoPending'
+  >
+>
+
+export interface AssetType {
+  id: string
+  name: string
+  createdAt: number
 }
 
 export interface Category {

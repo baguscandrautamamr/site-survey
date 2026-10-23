@@ -44,6 +44,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /assetTypes/{assetTypeId} {
+      allow read: if isActive();
+      allow write: if isAdmin();
+    }
+
     match /projects/{projectId} {
       allow read, update, delete: if isActive() &&
         (isAdmin() || request.auth.uid in resource.data.get('memberUids', []));

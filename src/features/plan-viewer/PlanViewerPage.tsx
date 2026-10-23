@@ -7,6 +7,7 @@ import { clientPointToNormalized } from './coordinateMath'
 import { usePins } from './usePins'
 import PinMarker from './PinMarker'
 import PinFormModal from './PinFormModal'
+import AssetFormModal from '../assets/AssetFormModal'
 import ToolSidebar from './ToolSidebar'
 import AnnotationLayer from './AnnotationLayer'
 import TextBoxModal from './TextBoxModal'
@@ -30,7 +31,7 @@ export default function PlanViewerPage() {
   const { projectId, planId } = useParams<{ projectId: string; planId: string }>()
   const navigate = useNavigate()
   const [plan, setPlan] = useState<Plan | null>(null)
-  const { pins, createPin, updatePin } = usePins(projectId, planId)
+  const { pins, createPin, updatePin, deletePin } = usePins(projectId, planId)
   const { plans } = usePlans(projectId)
   const { categories } = useCategories()
   const { t } = useTranslation()
@@ -97,8 +98,8 @@ export default function PlanViewerPage() {
   }, [undo])
 
   const onContainerClick = async (e: React.MouseEvent<HTMLDivElement>) => {
-    if (tool !== 'pin') {
-      // Pin hanya bisa ditambahkan saat alat "Tambah temuan" aktif
+    if (tool !== 'pin' && tool !== 'asset') {
+      // Pin hanya bisa ditambahkan saat alat "Tambah temuan" / "Tambah aset" aktif
       setSelectedAnnotationId(null)
       return
     }
@@ -107,7 +108,7 @@ export default function PlanViewerPage() {
     const { x, y } = clientPointToNormalized(e.clientX, e.clientY, rect)
     setDropping(true)
     try {
-      const pinId = await createPin(x, y)
+      const pinId = await createPin(x, y, tool === 'asset' ? 'asset' : 'finding')
       setSelectedPinId(pinId)
     } finally {
       setDropping(false)
@@ -246,6 +247,8 @@ export default function PlanViewerPage() {
             ? t('planViewer.calibrateHint')
             : tool === 'pin'
               ? t('planViewer.tapHint')
+              : tool === 'asset'
+                ? t('planViewer.assetTapHint')
               : tool === 'text'
                 ? t('planViewer.textDrawHint')
                 : isDrawingTool
@@ -284,8 +287,18 @@ export default function PlanViewerPage() {
         />
       )}
 
-      {selectedPin && (
-        <PinFormModal pin={selectedPin} onClose={() => setSelectedPinId(null)} onUpdate={updatePin} />
+      {selectedPin?.kind === 'asset' ? (
+        <AssetFormModal
+          key={selectedPin.id}
+          pin={selectedPin}
+          onClose={() => setSelectedPinId(null)}
+          onUpdate={updatePin}
+          onDelete={deletePin}
+        />
+      ) : (
+        selectedPin && (
+          <PinFormModal pin={selectedPin} onClose={() => setSelectedPinId(null)} onUpdate={updatePin} />
+        )
       )}
     </div>
   )
