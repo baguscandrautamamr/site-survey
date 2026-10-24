@@ -155,7 +155,12 @@ export default function PunchListPage() {
         />
       ) : (
         selectedPin && (
-          <PinFormModal pin={selectedPin} onClose={() => setSelectedPinId(null)} onUpdate={updatePin} />
+          <PinFormModal
+            pin={selectedPin}
+            onClose={() => setSelectedPinId(null)}
+            onUpdate={updatePin}
+            onDelete={deletePin}
+          />
         )
       )}
     </div>
