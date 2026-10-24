@@ -8,11 +8,12 @@ interface Props {
   pin: Pin
   onClose: () => void
   onUpdate: (pinId: string, data: PinUpdate) => Promise<void>
+  onDelete: (pinId: string) => Promise<void>
 }
 
 const STATUSES: PinStatus[] = ['open', 'in_progress', 'done']
 
-export default function PinFormModal({ pin, onClose, onUpdate }: Props) {
+export default function PinFormModal({ pin, onClose, onUpdate, onDelete }: Props) {
   const { categories } = useCategories()
   const { t } = useTranslation()
   const [notes, setNotes] = useState(pin.notes)
@@ -47,12 +48,22 @@ export default function PinFormModal({ pin, onClose, onUpdate }: Props) {
 
   const photoToShow = localPreview ?? pin.photoURL
 
+  // Temuan tanpa catatan dan tanpa foto tidak berguna; hapus saat ditutup supaya
+  // tidak tertinggal sebagai pin kosong di denah, punch list, dan Excel.
+  const onCloseClick = () => {
+    const isEmpty = !notes.trim() && !photoToShow && !pin.localPhotoPending && !uploadingPhoto
+    if (isEmpty) {
+      onDelete(pin.id).catch((err) => console.error('Gagal menghapus temuan kosong:', err))
+    }
+    onClose()
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/40 sm:items-center sm:justify-center">
       <div className="w-full rounded-t-2xl bg-white p-4 dark:bg-slate-800 sm:max-w-md sm:rounded-2xl">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">{t('pinForm.title')}</h2>
-          <button type="button" onClick={onClose} className="text-2xl leading-none text-slate-400 dark:text-slate-500">
+          <button type="button" onClick={onCloseClick} className="text-2xl leading-none text-slate-400 dark:text-slate-500">
             &times;
           </button>
         </div>
@@ -134,7 +145,9 @@ export default function PinFormModal({ pin, onClose, onUpdate }: Props) {
             </label>
           </div>
 
-          {savingText && <p className="text-xs text-slate-400 dark:text-slate-500">{t('pinForm.saving')}</p>}
+          {/* Selalu dirender (invisible saat tidak menyimpan) supaya tinggi sheet tidak berubah:
+              kalau berubah saat catatan blur, tombol × bergeser di tengah tap dan tap-nya meleset */}
+          <p className={`text-xs text-slate-400 dark:text-slate-500 ${savingText ? '' : 'invisible'}`}>{t('pinForm.saving')}</p>
         </div>
       </div>
 
