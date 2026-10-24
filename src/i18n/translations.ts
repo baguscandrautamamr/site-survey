@@ -4,6 +4,8 @@ export const translations = {
     'app.logout': 'Keluar',
     'app.admin': 'Admin',
     'app.loading': 'Memuat...',
+    'app.updateAvailable': 'Versi baru aplikasi tersedia.',
+    'app.updateNow': 'Perbarui',
 
     'login.banned': 'Akun Anda telah dinonaktifkan oleh admin. Hubungi admin untuk informasi lebih lanjut.',
     'login.signInTitle': 'Masuk ke akun Anda',
@@ -325,6 +327,8 @@ export const translations = {
     'app.logout': 'Log Out',
     'app.admin': 'Admin',
     'app.loading': 'Loading...',
+    'app.updateAvailable': 'A new version of the app is available.',
+    'app.updateNow': 'Update',
 
     'login.banned': 'Your account has been deactivated by an admin. Contact an admin for more information.',
     'login.signInTitle': 'Sign in to your account',
