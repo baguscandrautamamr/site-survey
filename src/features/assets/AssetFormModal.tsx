@@ -235,7 +235,7 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/40 sm:items-center sm:justify-center">
-      <div className="max-h-[100dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 dark:bg-slate-800 sm:max-w-md sm:rounded-2xl">
+      <div className="max-h-full w-full overflow-y-auto rounded-t-2xl bg-white p-4 dark:bg-slate-800 sm:max-w-md sm:rounded-2xl">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">{t('assetForm.title')}</h2>
           <button type="button" onClick={onCancel} className="text-2xl leading-none text-slate-400 dark:text-slate-500">
