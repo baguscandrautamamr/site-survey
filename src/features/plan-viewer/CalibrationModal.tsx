@@ -21,7 +21,7 @@ export default function CalibrationModal({ pixels, onSave, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-sm rounded-xl bg-white p-4 shadow-xl dark:bg-slate-800"
+        className="max-h-full w-full max-w-sm overflow-y-auto rounded-xl bg-white p-4 shadow-xl dark:bg-slate-800"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-2 flex items-center justify-between">

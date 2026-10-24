@@ -70,7 +70,7 @@ export default function PlanUploadButton({ uploading, onUpload, variant = 'prima
       {pendingFile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={reset}>
           <div
-            className="flex w-full max-w-sm flex-col gap-3 rounded-xl bg-white p-4 shadow-xl dark:bg-slate-800"
+            className="flex max-h-full w-full max-w-sm flex-col gap-3 overflow-y-auto rounded-xl bg-white p-4 shadow-xl dark:bg-slate-800"
             onClick={(e) => e.stopPropagation()}
           >
             <input
