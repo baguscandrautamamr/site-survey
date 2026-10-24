@@ -21,6 +21,27 @@ interface CountPhotoDraft {
   fileName: string
 }
 
+// Pin aset yang belum berisi apa pun (baru ditaruh lalu dibatalkan)
+function isEmptyAsset(a: {
+  assetType?: string
+  quantity?: number
+  notes?: string
+  photoURL?: string | null
+  countPhotoURL?: string | null
+  localPhotoPending?: boolean
+  localCountPhotoPending?: boolean
+}) {
+  return (
+    !a.assetType &&
+    !a.quantity &&
+    !a.notes?.trim() &&
+    !a.photoURL &&
+    !a.countPhotoURL &&
+    !a.localPhotoPending &&
+    !a.localCountPhotoPending
+  )
+}
+
 function Stepper({
   value,
   onChange,
@@ -94,14 +115,21 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
   const [countPhoto, setCountPhoto] = useState<CountPhotoDraft | null>(null)
   const [counting, setCounting] = useState<{ autoRunAI: boolean } | null>(null)
   const [preparingPhoto, setPreparingPhoto] = useState(false)
-  const [uploadingEvidence, setUploadingEvidence] = useState(false)
-  const [evidencePreview, setEvidencePreview] = useState<string | null>(null)
+  // Foto bukti baru; baru di-upload saat Simpan, sama seperti field lain
+  const [evidence, setEvidence] = useState<CountPhotoDraft | null>(null)
+  const [preparingEvidence, setPreparingEvidence] = useState(false)
 
   useEffect(() => {
     return () => {
       if (countPhoto) URL.revokeObjectURL(countPhoto.src)
     }
   }, [countPhoto])
+
+  useEffect(() => {
+    return () => {
+      if (evidence) URL.revokeObjectURL(evidence.src)
+    }
+  }, [evidence])
 
   const good = Math.max(0, quantity - damaged - missing)
   const countImageSrc = countPhoto?.src ?? pin.countPhotoURL ?? null
@@ -144,17 +172,31 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    setEvidencePreview(URL.createObjectURL(file))
-    setUploadingEvidence(true)
+    setPreparingEvidence(true)
     try {
-      const compressed = await compressPhoto(file)
-      await savePinPhoto(pin, compressed, file.name, 'photo', onUpdate)
+      const blob = await compressPhoto(file)
+      setEvidence({ src: URL.createObjectURL(blob), blob, fileName: file.name })
     } finally {
-      setUploadingEvidence(false)
+      setPreparingEvidence(false)
     }
   }
 
+  // Tutup tanpa menyimpan. Pin aset yang masih kosong ikut dihapus supaya tidak
+  // tertinggal sebagai penanda "0" di denah dan baris kosong di Excel.
+  const onCancel = () => {
+    if (isEmptyAsset(pin)) {
+      onDelete(pin.id).catch((err) => console.error('Gagal menghapus aset kosong:', err))
+    }
+    onClose()
+  }
+
   const onSave = () => {
+    const nothingEntered =
+      isEmptyAsset({ ...pin, assetType, quantity, notes }) && !countPhoto && !evidence
+    if (nothingEntered) {
+      onCancel()
+      return
+    }
     // Tidak di-await: saat offline, Firestore baru resolve setelah tersinkron ke
     // server, sementara snapshot lokal sudah langsung ter-update.
     onUpdate(pin.id, {
@@ -172,6 +214,11 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
         console.error('Gagal menyimpan foto hitung:', err),
       )
     }
+    if (evidence) {
+      savePinPhoto(pin, evidence.blob, evidence.fileName, 'photo', onUpdate).catch((err) =>
+        console.error('Gagal menyimpan foto bukti:', err),
+      )
+    }
     onClose()
   }
 
@@ -182,7 +229,7 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
     }
   }
 
-  const evidenceToShow = evidencePreview ?? pin.photoURL
+  const evidenceToShow = evidence?.src ?? pin.photoURL
   const typeOptions = assetTypes.map((a) => a.name)
   if (assetType && !typeOptions.includes(assetType)) typeOptions.unshift(assetType)
 
@@ -191,7 +238,7 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
       <div className="max-h-[100dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 dark:bg-slate-800 sm:max-w-md sm:rounded-2xl">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">{t('assetForm.title')}</h2>
-          <button type="button" onClick={onClose} className="text-2xl leading-none text-slate-400 dark:text-slate-500">
+          <button type="button" onClick={onCancel} className="text-2xl leading-none text-slate-400 dark:text-slate-500">
             &times;
           </button>
         </div>
@@ -262,7 +309,11 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
                 />
               </label>
               <label className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-3 text-sm font-medium text-slate-700 dark:border-slate-600 dark:text-slate-300">
-                {uploadingEvidence ? t('pinForm.uploadingPhoto') : t('assetForm.evidencePhoto')}
+                {preparingEvidence
+                  ? t('assetForm.preparingPhoto')
+                  : evidenceToShow
+                    ? t('assetForm.changeEvidencePhoto')
+                    : t('assetForm.evidencePhoto')}
                 <input type="file" accept="image/*" capture="environment" className="hidden" onChange={onEvidenceSelected} />
               </label>
             </div>
@@ -270,6 +321,7 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
             {evidenceToShow && (
               <img src={evidenceToShow} alt={t('pinForm.photoAlt')} className="mt-3 h-28 w-full rounded-lg object-cover" />
             )}
+            {evidence && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('assetForm.savedOnSave')}</p>}
           </Section>
 
           <Section title={t('assetForm.condition')}>
@@ -287,6 +339,9 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
                 <span className="w-16 text-center text-lg font-bold text-green-600">{good}</span>
               </div>
             </div>
+            {quantity === 0 && (
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('assetForm.fillQuantityFirst')}</p>
+            )}
             <p className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               {t('pinForm.notes')}
             </p>
@@ -308,7 +363,7 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={onCancel}
               className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-medium text-slate-700 dark:border-slate-700 dark:text-slate-300"
             >
               {t('assetForm.cancel')}
