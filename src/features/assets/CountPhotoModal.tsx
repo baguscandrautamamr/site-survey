@@ -86,8 +86,12 @@ export default function CountPhotoModal({
     const y = (e.clientY - rect.top) / rect.height
     if (x < 0 || x > 1 || y < 0 || y > 1) return
 
-    const hit = points.findIndex(
-      (p) => Math.hypot((p.x - x) * rect.width, (p.y - y) * rect.height) <= HIT_RADIUS_PX,
+    // Tap di dalam kotak (atau dekat titik manual) = hapus objek itu
+    const hit = points.findIndex((p) =>
+      p.w && p.h
+        ? Math.abs(p.x - x) * rect.width <= (p.w * rect.width) / 2 + 4 &&
+          Math.abs(p.y - y) * rect.height <= (p.h * rect.height) / 2 + 4
+        : Math.hypot((p.x - x) * rect.width, (p.y - y) * rect.height) <= HIT_RADIUS_PX,
     )
     setAiCountOnly(null)
     if (hit >= 0) {
@@ -168,7 +172,28 @@ export default function CountPhotoModal({
                 draggable={false}
                 className="block max-h-[calc(100dvh-170px)] max-w-full select-none"
               />
-              {points.map((p, i) => (
+              {points.map((p, i) =>
+                p.w && p.h ? (
+                  // Kotak berlabel ala Roboflow
+                  <span
+                    key={i}
+                    className="pointer-events-none absolute border-2 border-violet-500"
+                    style={{
+                      left: `${(p.x - p.w / 2) * 100}%`,
+                      top: `${(p.y - p.h / 2) * 100}%`,
+                      width: `${p.w * 100}%`,
+                      height: `${p.h * 100}%`,
+                      borderWidth: `${2 / scale}px`,
+                    }}
+                  >
+                    <span
+                      className="absolute left-0 top-full whitespace-nowrap bg-violet-500 px-1 text-[10px] font-semibold uppercase leading-4 text-white"
+                      style={{ transform: `scale(${1 / scale})`, transformOrigin: 'top left' }}
+                    >
+                      {assetType || 'Objek'} {i + 1}
+                    </span>
+                  </span>
+                ) : (
                 <span
                   key={i}
                   className="pointer-events-none absolute flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-amber-400 px-1 text-[11px] font-bold text-slate-900 shadow"
@@ -180,7 +205,8 @@ export default function CountPhotoModal({
                 >
                   {i + 1}
                 </span>
-              ))}
+                ),
+              )}
             </div>
           </TransformComponent>
         </TransformWrapper>

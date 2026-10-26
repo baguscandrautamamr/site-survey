@@ -58,8 +58,12 @@ export interface Pin {
 }
 
 export interface CountPoint {
+  // Titik tengah objek, dinormalisasi 0..1
   x: number
   y: number
+  // Ukuran kotak deteksi AI (0..1). Tidak ada untuk titik yang ditambah manual
+  w?: number
+  h?: number
 }
 
 export type PinUpdate = Partial<

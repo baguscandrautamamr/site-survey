@@ -16,11 +16,12 @@ function chatCompletionsUrl() {
 function buildPrompt(assetType: string) {
   return [
     `Hitung semua objek "${assetType}" yang terlihat di foto ini.`,
-    'Untuk setiap objek, beri satu titik di tengah objek tersebut.',
-    'Koordinat x dan y dinormalisasi 0..1 terhadap lebar dan tinggi foto, dihitung dari pojok kiri atas.',
+    'Untuk setiap objek, beri kotak pembatas (bounding box) yang pas mengelilingi objek tersebut.',
+    'x dan y = titik TENGAH kotak, w dan h = lebar dan tinggi kotak.',
+    'Semua nilai dinormalisasi 0..1 terhadap lebar dan tinggi foto, dihitung dari pojok kiri atas.',
     'Hanya hitung objek yang benar-benar jenis tersebut; jangan hitung pantulan atau objek lain yang mirip.',
     'Balas HANYA dengan JSON tanpa teks lain, format:',
-    '{"count": <jumlah>, "points": [{"x": 0.12, "y": 0.34}], "note": "<catatan singkat, opsional>"}',
+    '{"count": <jumlah>, "points": [{"x": 0.12, "y": 0.34, "w": 0.08, "h": 0.05}], "note": "<catatan singkat, opsional>"}',
   ].join('\n')
 }
 
@@ -97,7 +98,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           !!p && typeof (p as { x: unknown }).x === 'number' && typeof (p as { y: unknown }).y === 'number',
       )
       .slice(0, MAX_POINTS)
-      .map((p) => ({ x: clamp01(p.x), y: clamp01(p.y) }))
+      .map((p) => {
+        const { w, h } = p as { w?: unknown; h?: unknown }
+        const box =
+          typeof w === 'number' && typeof h === 'number' && w > 0 && h > 0
+            ? { w: clamp01(w), h: clamp01(h) }
+            : {}
+        return { x: clamp01(p.x), y: clamp01(p.y), ...box }
+      })
     const reportedCount =
       typeof parsed.count === 'number' && Number.isFinite(parsed.count) ? Math.max(0, Math.round(parsed.count)) : 0
     return res.json({
