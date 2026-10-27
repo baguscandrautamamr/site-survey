@@ -8,6 +8,7 @@ import {
   type Point,
   type ShapeAnnotation,
   type ShapeVariant,
+  type TextAnnotation,
   type Tool,
 } from './annotations'
 
@@ -104,6 +105,18 @@ function translated(a: Annotation, dx: number, dy: number): Partial<Annotation> 
     return { x1: a.x1 + dx, y1: a.y1 + dy, x2: a.x2 + dx, y2: a.y2 + dy }
   }
   return { x: a.x + dx, y: a.y + dy }
+}
+
+// Ukuran kotak teks mengikuti isi teks (bukan kotak yang diseret), dalam koordinat 0..1
+let measureCtx: CanvasRenderingContext2D | null = null
+function fitTextBox(a: TextAnnotation, W: number, H: number): TextAnnotation {
+  measureCtx ??= document.createElement('canvas').getContext('2d')
+  if (!measureCtx) return a
+  const fontPx = a.fontSize * (W / 1000)
+  measureCtx.font = `600 ${fontPx}px ${getComputedStyle(document.body).fontFamily}`
+  const lines = a.text.split('\n')
+  const widthPx = Math.max(...lines.map((l) => measureCtx!.measureText(l).width))
+  return { ...a, w: (widthPx + fontPx * 0.2) / W, h: (lines.length * fontPx * 1.25) / H }
 }
 
 function annotationBBox(a: Annotation): { x: number; y: number; w: number; h: number } {
@@ -352,8 +365,7 @@ export default function AnnotationLayer({
               fontSize: `${a.fontSize * fontScale}px`,
               lineHeight: 1.25,
               overflow: 'hidden',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
+              whiteSpace: 'pre',
               fontWeight: 600,
             }}
           >
@@ -448,7 +460,8 @@ export default function AnnotationLayer({
     return a ? renderShape(a, true) : null
   }
 
-  const selected = annotations.find((a) => a.id === selectedId)
+  const shown = annotations.map((a) => (a.kind === 'text' ? fitTextBox(a, W, H) : a))
+  const selected = shown.find((a) => a.id === selectedId)
   const selectedBox = selected ? annotationBBox(selected) : null
 
   return (
@@ -469,7 +482,7 @@ export default function AnnotationLayer({
         onPointerUp={onPointerUp}
         onPointerCancel={() => setDraft(null)}
       >
-        {annotations.map((a) => renderShape(a))}
+        {shown.map((a) => renderShape(a))}
         {renderDraft()}
         {selected && selectedBox && (
           <rect
