@@ -25,6 +25,7 @@ interface Props {
   onSelect: (id: string | null) => void
   onAdd: (a: Annotation) => void
   onDelete: (id: string) => void
+  onMove: (id: string, data: Partial<Annotation>) => void
   onTextRect: (rect: { x: number; y: number; w: number; h: number }) => void
   onCalibrate: (pixels: number) => void
 }
@@ -96,6 +97,15 @@ function arrowHead(x1: number, y1: number, x2: number, y2: number, size: number)
   return `M ${p1x} ${p1y} L ${x2} ${y2} L ${p2x} ${p2y}`
 }
 
+// Menggeser anotasi sejauh dx, dy (koordinat ternormalisasi 0..1)
+function translated(a: Annotation, dx: number, dy: number): Partial<Annotation> {
+  if (a.kind === 'freehand') return { points: a.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) }
+  if ('x1' in a) {
+    return { x1: a.x1 + dx, y1: a.y1 + dy, x2: a.x2 + dx, y2: a.y2 + dy }
+  }
+  return { x: a.x + dx, y: a.y + dy }
+}
+
 function annotationBBox(a: Annotation): { x: number; y: number; w: number; h: number } {
   if (a.kind === 'freehand') {
     const xs = a.points.map((p) => p.x)
@@ -135,18 +145,20 @@ export default function AnnotationLayer({
   onSelect,
   onAdd,
   onDelete,
+  onMove,
   onTextRect,
   onCalibrate,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
+  const dragRef = useRef<{ id: string; start: Point; orig: Annotation; moved: boolean } | null>(null)
   const W = imageWidth
   const H = imageHeight
   const isDrawing = DRAWING_TOOLS.includes(tool)
   const strokeW = Math.max(W, H) / 500
   const fontScale = W / 1000
 
-  const toNorm = (e: React.PointerEvent): Point => {
+  const toNorm = (e: { clientX: number; clientY: number }): Point => {
     const rect = svgRef.current!.getBoundingClientRect()
     return {
       x: Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)),
@@ -232,6 +244,30 @@ export default function AnnotationLayer({
     }
   }
 
+  // Mode pilih: seret anotasi untuk memindahkannya
+  const startDrag = (e: React.PointerEvent, a: Annotation) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    onSelect(a.id)
+    dragRef.current = { id: a.id, start: toNorm(e), orig: a, moved: false }
+    const onMoveEvt = (ev: PointerEvent) => {
+      const d = dragRef.current
+      if (!d) return
+      const p = toNorm(ev)
+      d.moved = true
+      onMove(d.id, translated(d.orig, p.x - d.start.x, p.y - d.start.y))
+    }
+    const onUp = () => {
+      dragRef.current = null
+      window.removeEventListener('pointermove', onMoveEvt)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+    window.addEventListener('pointermove', onMoveEvt)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+  }
+
   const renderShape = (a: Annotation, isDraft = false) => {
     const common = {
       stroke: a.color,
@@ -240,7 +276,7 @@ export default function AnnotationLayer({
       opacity: isDraft ? 0.7 : 1,
       style:
         tool === 'select' && !isDraft
-          ? ({ cursor: 'pointer', pointerEvents: 'visiblePainted' } as React.CSSProperties)
+          ? ({ cursor: 'move', pointerEvents: 'visiblePainted', touchAction: 'none' } as React.CSSProperties)
           : ({ pointerEvents: 'none' } as React.CSSProperties),
       onClick:
         tool === 'select' && !isDraft
@@ -249,6 +285,8 @@ export default function AnnotationLayer({
               onSelect(a.id)
             }
           : undefined,
+      onPointerDown: tool === 'select' && !isDraft ? (e: React.PointerEvent) => startDrag(e, a) : undefined,
+      className: 'annotation-draggable',
     }
 
     if (a.kind === 'freehand') {
@@ -302,8 +340,11 @@ export default function AnnotationLayer({
           height={a.h * H}
           style={common.style}
           onClick={common.onClick}
+          onPointerDown={common.onPointerDown}
+          className={common.className}
         >
           <div
+            className="annotation-draggable"
             style={{
               width: '100%',
               height: '100%',

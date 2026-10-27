@@ -52,7 +52,7 @@ export default function PlanViewerPage() {
   const [textRect, setTextRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   const [calibrating, setCalibrating] = useState(false)
   const [pendingCalibrationPx, setPendingCalibrationPx] = useState<number | null>(null)
-  const { annotations, addAnnotation, removeAnnotation, undo } = useAnnotations(projectId, planId)
+  const { annotations, addAnnotation, updateAnnotation, removeAnnotation, undo } = useAnnotations(projectId, planId)
   const { calibration, setCalibration } = useCalibration(projectId, planId)
 
   const isDrawingTool = DRAWING_TOOLS.includes(tool)
@@ -208,7 +208,7 @@ export default function PlanViewerPage() {
           doubleClick={{ disabled: true }}
           minScale={0.5}
           maxScale={6}
-          panning={{ disabled: isDrawingTool }}
+          panning={{ disabled: isDrawingTool, excluded: ['annotation-draggable'] }}
           onTransform={(_ref: unknown, state: { scale: number }) => setZoomScale(state.scale)}
         >
           <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }} contentStyle={{ width: '100%' }}>
@@ -228,6 +228,7 @@ export default function PlanViewerPage() {
                 onSelect={setSelectedAnnotationId}
                 onAdd={addAnnotation}
                 onDelete={removeAnnotation}
+                onMove={updateAnnotation}
                 onTextRect={setTextRect}
                 onCalibrate={setPendingCalibrationPx}
               />
@@ -263,8 +264,9 @@ export default function PlanViewerPage() {
         <TextBoxModal
           onClose={() => setTextRect(null)}
           onSave={(text, fontSize) => {
+            const id = newAnnotationId()
             addAnnotation({
-              id: newAnnotationId(),
+              id,
               color,
               createdAt: Date.now(),
               kind: 'text',
@@ -273,6 +275,9 @@ export default function PlanViewerPage() {
               fontSize,
             })
             setTextRect(null)
+            // Kembali ke mode pilih agar teks tidak dibuat berulang dan langsung bisa digeser
+            setTool('select')
+            setSelectedAnnotationId(id)
           }}
         />
       )}
