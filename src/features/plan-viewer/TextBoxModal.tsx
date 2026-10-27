@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from '../../i18n/LanguageContext'
 import { TEXT_FONT_SIZES } from './annotations'
 
@@ -14,7 +14,12 @@ export default function TextBoxModal({ initialText = '', initialFontSize = 16, o
   const [text, setText] = useState(initialText)
   const [fontSize, setFontSize] = useState(initialFontSize)
 
+  const savedRef = useRef(false)
+
   const save = () => {
+    // Cegah simpan ganda (klik dobel / tap ganda) yang membuat teks berulang
+    if (savedRef.current) return
+    savedRef.current = true
     if (text.trim()) onSave(text, fontSize)
     else onClose()
   }
