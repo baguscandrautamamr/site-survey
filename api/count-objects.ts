@@ -9,15 +9,13 @@ const aiModel = process.env.AI_MODEL
 const aiBaseUrl = (process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '')
 
 const MAX_POINTS = 500
-// Foto dikompres ke <= 1 MB di browser (~1,4 juta karakter base64); beri kelonggaran.
-const MAX_DATA_URL_LENGTH = 4_000_000
 const cloudName = process.env.CLOUDINARY_CLOUD_NAME ?? process.env.VITE_CLOUDINARY_CLOUD_NAME
 
 // Hanya foto milik aplikasi: data URL gambar, atau URL Cloudinary akun ini.
 // URL sembarang ditolak supaya endpoint tidak bisa dipakai menyuruh penyedia AI
 // mengambil alamat lain.
 function isAllowedImage(image: string) {
-  if (/^data:image\/(jpeg|png|webp|gif);base64,/.test(image)) return image.length <= MAX_DATA_URL_LENGTH
+  if (/^data:image\/(jpeg|png|webp|gif);base64,/.test(image)) return true
   let url: URL
   try {
     url = new URL(image)
@@ -79,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const assetType = typeof body.assetType === 'string' ? body.assetType.trim().slice(0, 100) : ''
   if (!assetType) return res.status(400).json({ error: 'Pilih jenis aset dulu.' })
   if (!isAllowedImage(image)) {
-    return res.status(400).json({ error: 'Foto tidak valid atau terlalu besar.' })
+    return res.status(400).json({ error: 'Foto tidak valid.' })
   }
 
   try {
