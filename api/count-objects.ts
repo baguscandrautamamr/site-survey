@@ -1,6 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireUser } from './_lib/auth.js'
-import { consumeAiQuota } from './_lib/aiQuota.js'
 
 // Any OpenAI-compatible chat completions API with vision support
 // (OpenAI, OpenRouter, Together, a self-hosted gateway, ...).
@@ -58,10 +57,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'POST') return res.status(405).json({ error: 'Gunakan POST.' })
 
-  let user
   try {
-    user = await requireUser(req)
-    if ('error' in user) return res.status(user.status).json({ error: user.error })
+    const denied = await requireUser(req)
+    if ('error' in denied) return res.status(denied.status).json({ error: denied.error })
   } catch (e) {
     return res.status(504).json({ error: `Gagal memverifikasi login: ${e instanceof Error ? e.message : String(e)}` })
   }
@@ -78,13 +76,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!assetType) return res.status(400).json({ error: 'Pilih jenis aset dulu.' })
   if (!isAllowedImage(image)) {
     return res.status(400).json({ error: 'Foto tidak valid.' })
-  }
-
-  try {
-    const overLimit = await consumeAiQuota(user)
-    if (overLimit) return res.status(overLimit.status).json({ error: overLimit.error })
-  } catch (e) {
-    return res.status(504).json({ error: `Gagal memeriksa jatah AI: ${e instanceof Error ? e.message : String(e)}` })
   }
 
   let content: string
