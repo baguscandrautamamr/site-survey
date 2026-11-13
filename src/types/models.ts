@@ -43,6 +43,9 @@ export interface Pin {
   createdByName: string
   createdAt: number
   updatedAt: number
+  // Pengedit terakhir. Kosong untuk pin yang belum diubah sejak field ini ada
+  updatedBy?: string
+  updatedByName?: string
   kind?: PinKind
   // Field khusus pin aset
   assetType?: string

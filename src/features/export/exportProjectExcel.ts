@@ -266,6 +266,7 @@ function addFloorSheet(wb: Workbook, name: string, f: FloorData, t: T, photos: P
     pin.createdByName,
     toMs(pin.createdAt) ? new Date(toMs(pin.createdAt)) : null,
     photoCell(pin.photoURL, pin.localPhotoPending, t),
+    pin.updatedByName ?? '',
   ])
   f.findings.forEach(({ pin }, i) => {
     if (photos && pin.photoURL) photos.push({ ws, row: 6 + i, col: 8, url: pin.photoURL })
@@ -282,6 +283,7 @@ function addFloorSheet(wb: Workbook, name: string, f: FloorData, t: T, photos: P
       t('export.createdBy'),
       t('export.date'),
       t('pinForm.photo'),
+      t('export.updatedBy'),
     ],
     findingRows.length ? findingRows : [[t('export.noFindings')]],
   )
@@ -303,6 +305,7 @@ function addFloorSheet(wb: Workbook, name: string, f: FloorData, t: T, photos: P
     toMs(pin.createdAt) ? new Date(toMs(pin.createdAt)) : null,
     photoCell(pin.photoURL, pin.localPhotoPending, t),
     photoCell(pin.countPhotoURL, pin.localCountPhotoPending, t),
+    pin.updatedByName ?? '',
   ])
   f.assets.forEach(({ pin }, i) => {
     if (!photos) return
@@ -326,11 +329,12 @@ function addFloorSheet(wb: Workbook, name: string, f: FloorData, t: T, photos: P
       t('export.date'),
       t('assetForm.evidencePhoto'),
       t('export.countPhoto'),
+      t('export.updatedBy'),
     ],
     assetRows.length ? assetRows : [[t('export.noAssets')]],
   )
 
-  const widths = [6, 22, 20, 12, 40, 22, 17, 14, 40, 22, 17, 14, 14]
+  const widths = [6, 22, 20, 12, 40, 22, 17, 14, 40, 22, 17, 14, 14, 22]
   ws.columns.forEach((col, i) => (col.width = widths[i] ?? 14))
 }
 

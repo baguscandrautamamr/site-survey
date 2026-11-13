@@ -79,6 +79,29 @@ export function useProjectMembers(projectId: string | undefined) {
     }
   }, [uidsKey, ownerUid])
 
+  // Semua akun terdaftar yang belum jadi anggota, untuk ditawarkan sebagai pilihan
+  const [allUsers, setAllUsers] = useState<{ uid: string; email: string }[]>([])
+  useEffect(() => {
+    return onSnapshot(
+      collection(db, 'users'),
+      (snap) => {
+        setAllUsers(
+          snap.docs
+            .map((d) => ({ uid: d.id, email: ((d.data() as { email?: string }).email ?? '').toLowerCase() }))
+            .filter((u) => u.email)
+            .sort((a, b) => a.email.localeCompare(b.email)),
+        )
+      },
+      (err) => console.error('Gagal memuat daftar pengguna:', err),
+    )
+  }, [])
+  const candidates = allUsers.filter((u) => !memberUids.includes(u.uid))
+
+  const addMemberByUid = async (uid: string) => {
+    if (!projectId) throw new Error('Missing project')
+    await updateDoc(doc(db, 'projects', projectId), { memberUids: arrayUnion(uid) })
+  }
+
   const addMember = async (email: string): Promise<AddMemberResult> => {
     if (!projectId) throw new Error('Missing project')
     // Firebase Auth menyimpan email dalam huruf kecil
@@ -96,5 +119,5 @@ export function useProjectMembers(projectId: string | undefined) {
     await updateDoc(doc(db, 'projects', projectId), { memberUids: arrayRemove(uid) })
   }
 
-  return { members, loading, error, addMember, removeMember }
+  return { members, candidates, loading, error, addMember, addMemberByUid, removeMember }
 }

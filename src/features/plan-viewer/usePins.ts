@@ -81,6 +81,7 @@ export function usePins(projectId: string | undefined, planId: string | undefine
     await updateDoc(doc(db, 'projects', projectId, 'plans', planId, 'pins', pinId), {
       ...data,
       updatedAt: serverTimestamp(),
+      ...(user && { updatedBy: user.uid, updatedByName: user.email ?? '' }),
     })
   }
 
