@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import PlanListPage from '../plans/PlanListPage'
 import TaskListPage from '../tasks/TaskListPage'
+import ProjectMembersPanel from './ProjectMembersPanel'
 import { useTranslation } from '../../i18n/LanguageContext'
 
-type Tab = 'plans' | 'tasks'
+type Tab = 'plans' | 'tasks' | 'members'
 
 export default function ProjectDetailPage() {
   const { t } = useTranslation()
@@ -12,6 +13,7 @@ export default function ProjectDetailPage() {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'plans', label: t('project.tabPlans') },
     { key: 'tasks', label: t('project.tabTasks') },
+    { key: 'members', label: t('project.tabMembers') },
   ]
 
   return (
@@ -35,6 +37,7 @@ export default function ProjectDetailPage() {
 
       {tab === 'plans' && <PlanListPage />}
       {tab === 'tasks' && <TaskListPage />}
+      {tab === 'members' && <ProjectMembersPanel />}
     </div>
   )
 }
