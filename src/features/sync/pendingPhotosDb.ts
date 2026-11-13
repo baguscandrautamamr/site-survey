@@ -11,6 +11,9 @@ export interface PendingPhotoRecord {
   createdAt: number
   // Field pin yang diisi saat sync. Record lama tanpa field ini = foto temuan biasa.
   field?: PinPhotoField
+  // Hasil upload Cloudinary, disimpan begitu upload berhasil supaya percobaan
+  // ulang (kalau update Firestore gagal) tidak meng-upload foto yang sama lagi.
+  uploaded?: { url: string; publicId: string }
 }
 
 export type PinPhotoField = 'photo' | 'countPhoto'

@@ -37,10 +37,18 @@ export function useStandards() {
 
   useEffect(() => {
     const q = query(collection(db, 'standards'), orderBy('createdAt', 'desc'))
-    const unsub = onSnapshot(q, (snap) => {
-      setStandards(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Standard, 'id'>) })))
-      setLoading(false)
-    })
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setStandards(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Standard, 'id'>) })))
+        setLoading(false)
+      },
+      (err) => {
+        console.error('Gagal memuat standar:', err)
+        setStandards([])
+        setLoading(false)
+      },
+    )
     return unsub
   }, [])
 

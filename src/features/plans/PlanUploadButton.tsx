@@ -15,10 +15,14 @@ export default function PlanUploadButton({ uploading, onUpload, variant = 'prima
   const inputRef = useRef<HTMLInputElement>(null)
   const [pending, setPending] = useState<{ file: File; name: string; floor: string }[]>([])
   const [progress, setProgress] = useState(0)
+  // Jumlah file dalam batch yang sedang diunggah (pending menyusut saat ada yang gagal)
+  const [total, setTotal] = useState(0)
+  const [error, setError] = useState('')
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
     if (!files.length) return
+    setError('')
     setPending(
       files.map((file) => {
         const baseName = file.name.replace(/\.[^/.]+$/, '')
@@ -30,6 +34,7 @@ export default function PlanUploadButton({ uploading, onUpload, variant = 'prima
   const reset = () => {
     setPending([])
     setProgress(0)
+    setError('')
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -39,11 +44,28 @@ export default function PlanUploadButton({ uploading, onUpload, variant = 'prima
   const onConfirm = async () => {
     if (!pending.length || pending.some((p) => !p.name.trim())) return
     // Diunggah berurutan agar konversi PDF tidak membebani perangkat
+    setError('')
+    setTotal(pending.length)
+    const failed: typeof pending = []
+    let lastError = ''
     for (let i = 0; i < pending.length; i++) {
       setProgress(i + 1)
-      await onUpload(pending[i].name.trim(), pending[i].file, pending[i].floor.trim())
+      try {
+        await onUpload(pending[i].name.trim(), pending[i].file, pending[i].floor.trim())
+      } catch (e) {
+        console.error('Gagal mengunggah denah:', pending[i].file.name, e)
+        failed.push(pending[i])
+        lastError = e instanceof Error ? e.message : String(e)
+      }
     }
-    reset()
+    if (failed.length === 0) {
+      reset()
+      return
+    }
+    // Sisakan hanya yang gagal supaya bisa dicoba lagi tanpa memilih ulang file
+    setPending(failed)
+    setProgress(0)
+    setError(t('plans.uploadFailed', { count: failed.length, error: lastError }))
   }
 
   return (
@@ -109,6 +131,11 @@ export default function PlanUploadButton({ uploading, onUpload, variant = 'prima
               ))}
             </datalist>
             <span className="text-xs text-slate-400">{t('plans.floorHelp')}</span>
+            {error && (
+              <p role="alert" className="rounded-lg bg-red-50 p-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                {error}
+              </p>
+            )}
             <div className="flex justify-end gap-2">
               <button
                 type="button"
@@ -124,8 +151,10 @@ export default function PlanUploadButton({ uploading, onUpload, variant = 'prima
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
                 {uploading || progress > 0
-                  ? `${t('plans.uploading')}${pending.length > 1 ? ` ${progress}/${pending.length}` : ''}`
-                  : t('plans.uploadConfirm')}
+                  ? `${t('plans.uploading')}${total > 1 ? ` ${progress}/${total}` : ''}`
+                  : error
+                    ? t('plans.uploadRetry')
+                    : t('plans.uploadConfirm')}
               </button>
             </div>
           </div>

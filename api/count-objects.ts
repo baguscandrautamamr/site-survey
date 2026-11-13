@@ -8,6 +8,22 @@ const aiModel = process.env.AI_MODEL
 const aiBaseUrl = (process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '')
 
 const MAX_POINTS = 500
+const cloudName = process.env.CLOUDINARY_CLOUD_NAME ?? process.env.VITE_CLOUDINARY_CLOUD_NAME
+
+// Hanya foto milik aplikasi: data URL gambar, atau URL Cloudinary akun ini.
+// URL sembarang ditolak supaya endpoint tidak bisa dipakai menyuruh penyedia AI
+// mengambil alamat lain.
+function isAllowedImage(image: string) {
+  if (/^data:image\/(jpeg|png|webp|gif);base64,/.test(image)) return true
+  let url: URL
+  try {
+    url = new URL(image)
+  } catch {
+    return false
+  }
+  if (url.protocol !== 'https:' || url.hostname !== 'res.cloudinary.com') return false
+  return !cloudName || url.pathname.startsWith(`/${cloudName}/`)
+}
 
 function chatCompletionsUrl() {
   return aiBaseUrl.endsWith('/chat/completions') ? aiBaseUrl : `${aiBaseUrl}/chat/completions`
@@ -43,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const denied = await requireUser(req)
-    if (denied) return res.status(denied.status).json({ error: denied.error })
+    if ('error' in denied) return res.status(denied.status).json({ error: denied.error })
   } catch (e) {
     return res.status(504).json({ error: `Gagal memverifikasi login: ${e instanceof Error ? e.message : String(e)}` })
   }
@@ -58,7 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const image = typeof body.image === 'string' ? body.image : ''
   const assetType = typeof body.assetType === 'string' ? body.assetType.trim().slice(0, 100) : ''
   if (!assetType) return res.status(400).json({ error: 'Pilih jenis aset dulu.' })
-  if (!image.startsWith('data:image/') && !image.startsWith('https://')) {
+  if (!isAllowedImage(image)) {
     return res.status(400).json({ error: 'Foto tidak valid.' })
   }
 

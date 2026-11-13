@@ -41,7 +41,11 @@ export default function StandardsListPage() {
 
   const onDelete = async (standard: Standard) => {
     if (window.confirm(t('standards.deleteConfirm', { name: standard.name }))) {
-      await deleteStandard(standard.id)
+      try {
+        await deleteStandard(standard.id)
+      } catch (err) {
+        alert(err instanceof Error ? err.message : String(err))
+      }
     }
   }
 
