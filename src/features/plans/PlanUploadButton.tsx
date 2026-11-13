@@ -1,10 +1,20 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from '../../i18n/LanguageContext'
 import { FLOOR_SUGGESTIONS, guessFloorFromName } from './floors'
+import { getPdfPageCount, isPdfFile } from '../../lib/pdfToImage'
+
+interface PendingPlan {
+  key: string
+  file: File
+  // Halaman PDF (1 untuk gambar biasa)
+  page: number
+  name: string
+  floor: string
+}
 
 interface Props {
   uploading: boolean
-  onUpload: (name: string, file: File, floor: string) => Promise<void>
+  onUpload: (name: string, file: File, floor: string, page: number) => Promise<void>
   variant?: 'primary' | 'tile'
   // Lantai yang sudah dipakai di proyek ini, ditawarkan sebagai pilihan cepat
   existingFloors?: string[]
@@ -13,23 +23,43 @@ interface Props {
 export default function PlanUploadButton({ uploading, onUpload, variant = 'primary', existingFloors = [] }: Props) {
   const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
-  const [pending, setPending] = useState<{ file: File; name: string; floor: string }[]>([])
+  const [pending, setPending] = useState<PendingPlan[]>([])
+  const [reading, setReading] = useState(false)
   const [progress, setProgress] = useState(0)
   // Jumlah file dalam batch yang sedang diunggah (pending menyusut saat ada yang gagal)
   const [total, setTotal] = useState(0)
   const [error, setError] = useState('')
 
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
     if (!files.length) return
     setError('')
-    setPending(
-      files.map((file) => {
+    setReading(true)
+    try {
+      const items: PendingPlan[] = []
+      for (const file of files) {
         const baseName = file.name.replace(/\.[^/.]+$/, '')
-        return { file, name: baseName, floor: guessFloorFromName(baseName) }
-      }),
-    )
+        // Setiap halaman PDF menjadi satu denah
+        let pages = 1
+        if (isPdfFile(file)) {
+          try {
+            pages = await getPdfPageCount(file)
+          } catch (err) {
+            console.error('Gagal membaca PDF:', file.name, err)
+          }
+        }
+        for (let page = 1; page <= pages; page++) {
+          const name = pages > 1 ? `${baseName} - ${t('plans.pageShort', { page })}` : baseName
+          items.push({ key: `${file.name}-${file.size}-${page}`, file, page, name, floor: guessFloorFromName(baseName) })
+        }
+      }
+      setPending(items)
+    } finally {
+      setReading(false)
+    }
   }
+
+  const removeItem = (i: number) => setPending((prev) => prev.filter((_, idx) => idx !== i))
 
   const reset = () => {
     setPending([])
@@ -51,7 +81,7 @@ export default function PlanUploadButton({ uploading, onUpload, variant = 'prima
     for (let i = 0; i < pending.length; i++) {
       setProgress(i + 1)
       try {
-        await onUpload(pending[i].name.trim(), pending[i].file, pending[i].floor.trim())
+        await onUpload(pending[i].name.trim(), pending[i].file, pending[i].floor.trim(), pending[i].page)
       } catch (e) {
         console.error('Gagal mengunggah denah:', pending[i].file.name, e)
         failed.push(pending[i])
@@ -97,6 +127,14 @@ export default function PlanUploadButton({ uploading, onUpload, variant = 'prima
         </button>
       )}
 
+      {reading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <p className="rounded-xl bg-white px-4 py-3 text-sm text-slate-700 shadow-xl dark:bg-slate-800 dark:text-slate-200">
+            {t('plans.readingPdf')}
+          </p>
+        </div>
+      )}
+
       {pending.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={reset}>
           <div
@@ -104,8 +142,21 @@ export default function PlanUploadButton({ uploading, onUpload, variant = 'prima
             onClick={(e) => e.stopPropagation()}
           >
             {pending.map((p, i) => (
-              <div key={i} className="flex flex-col gap-2 border-b border-slate-200 pb-3 last:border-b-0 dark:border-slate-700">
-                {pending.length > 1 && <span className="truncate text-xs text-slate-400">{p.file.name}</span>}
+              <div key={p.key} className="flex flex-col gap-2 border-b border-slate-200 pb-3 last:border-b-0 dark:border-slate-700">
+                {pending.length > 1 && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-xs text-slate-400">{p.file.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeItem(i)}
+                      disabled={progress > 0}
+                      aria-label={t('plans.skipPage')}
+                      className="shrink-0 rounded px-2 text-lg leading-none text-slate-400 hover:text-red-500 disabled:opacity-40"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                )}
                 <input
                   autoFocus={i === 0}
                   value={p.name}

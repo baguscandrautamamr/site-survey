@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -8,14 +9,15 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   writeBatch,
 } from 'firebase/firestore'
 import imageCompression from 'browser-image-compression'
 import { db } from '../../firebase/config'
 import { uploadToCloudinary } from '../../lib/cloudinary'
-import { isPdfFile, renderPdfFirstPageToBlob } from '../../lib/pdfToImage'
+import { PLAN_MAX_DIMENSION, isPdfFile, renderPdfPageToBlob } from '../../lib/pdfToImage'
 import { useAuth } from '../auth/useAuth'
-import type { Plan } from '../../types/models'
+import type { Plan, PlanRevision } from '../../types/models'
 
 function loadImageDimensions(file: File): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
@@ -25,9 +27,31 @@ function loadImageDimensions(file: File): Promise<{ width: number; height: numbe
       resolve({ width: img.naturalWidth, height: img.naturalHeight })
       URL.revokeObjectURL(url)
     }
-    img.onerror = reject
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url)
+      reject(e)
+    }
     img.src = url
   })
+}
+
+// Siapkan gambar denah (halaman PDF dirender dulu) lalu upload ke Cloudinary.
+async function uploadPlanImage(file: File, page: number, idForName: string) {
+  let imageFile = file
+  if (isPdfFile(file)) {
+    const blob = await renderPdfPageToBlob(file, page)
+    imageFile = new File([blob], file.name.replace(/\.pdf$/i, `-p${page}.jpg`), { type: 'image/jpeg' })
+  }
+  const compressed = await imageCompression(imageFile, {
+    maxWidthOrHeight: PLAN_MAX_DIMENSION,
+    // Batas upload gambar Cloudinary paket gratis 10 MB
+    maxSizeMB: 4,
+    initialQuality: 0.9,
+    useWebWorker: true,
+  })
+  const { width, height } = await loadImageDimensions(compressed)
+  const { url, publicId } = await uploadToCloudinary(compressed, `plan-${idForName}-${imageFile.name}`)
+  return { imagePath: publicId, imageURL: url, imageWidth: width, imageHeight: height }
 }
 
 export function usePlans(projectId: string | undefined) {
@@ -51,41 +75,50 @@ export function usePlans(projectId: string | undefined) {
     return unsub
   }, [projectId])
 
-  const uploadPlan = async (name: string, file: File, floor = '') => {
+  const uploadPlan = async (name: string, file: File, floor = '', page = 1) => {
     if (!projectId || !user) throw new Error('Missing project or user')
     setUploading(true)
     try {
-      let imageFile = file
-      if (isPdfFile(file)) {
-        const pngBlob = await renderPdfFirstPageToBlob(file)
-        imageFile = new File([pngBlob], file.name.replace(/\.pdf$/i, '.png'), { type: 'image/png' })
-      }
-
-      const compressed = await imageCompression(imageFile, {
-        maxWidthOrHeight: 1600,
-        maxSizeMB: 1.5,
-        useWebWorker: true,
-      })
-      const { width, height } = await loadImageDimensions(compressed)
-
       const planRef = doc(collection(db, 'projects', projectId, 'plans'))
-      const { url: imageURL, publicId: imagePath } = await uploadToCloudinary(
-        compressed,
-        `plan-${planRef.id}-${imageFile.name}`,
-      )
-
+      const image = await uploadPlanImage(file, page, planRef.id)
       await setDoc(planRef, {
         projectId,
         name,
         floor,
-        imagePath,
-        imageURL,
-        imageWidth: width,
-        imageHeight: height,
+        ...image,
+        revision: 1,
         createdBy: user.uid,
         createdAt: serverTimestamp(),
       })
       return planRef.id
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // Ganti gambar denah dengan revisi baru. Pin, anotasi, dan kalibrasi tetap di
+  // dokumen yang sama (posisi pin dinormalisasi 0..1), dan gambar lama disimpan
+  // di `revisions` supaya bisa dibandingkan.
+  const uploadRevision = async (plan: Plan, file: File, page = 1) => {
+    if (!projectId || !user) throw new Error('Missing project or user')
+    setUploading(true)
+    try {
+      const current = plan.revision ?? 1
+      const image = await uploadPlanImage(file, page, `${plan.id}-rev${current + 1}`)
+      const previous: PlanRevision = {
+        revision: current,
+        imagePath: plan.imagePath,
+        imageURL: plan.imageURL,
+        imageWidth: plan.imageWidth,
+        imageHeight: plan.imageHeight,
+        replacedAt: Date.now(),
+        replacedByName: user.email ?? '',
+      }
+      await updateDoc(doc(db, 'projects', projectId, 'plans', plan.id), {
+        ...image,
+        revision: current + 1,
+        revisions: arrayUnion(previous),
+      })
     } finally {
       setUploading(false)
     }
@@ -105,5 +138,5 @@ export function usePlans(projectId: string | undefined) {
     await batch.commit()
   }
 
-  return { plans, loading, uploading, uploadPlan, deletePlan, setPlansFloor }
+  return { plans, loading, uploading, uploadPlan, uploadRevision, deletePlan, setPlansFloor }
 }

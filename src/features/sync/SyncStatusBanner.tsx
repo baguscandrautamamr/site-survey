@@ -9,7 +9,7 @@ export default function SyncStatusBanner() {
 
   return (
     <div
-      className={`px-4 py-1.5 text-center text-xs font-medium text-white ${
+      className={`print:hidden px-4 py-1.5 text-center text-xs font-medium text-white ${
         online ? 'bg-amber-500' : 'bg-slate-600'
       }`}
     >

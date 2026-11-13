@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc, updateDoc } from 'firebase/firestore'
+import { db } from '../../firebase/config'
+import { useAuth } from '../auth/useAuth'
 
-// Alat gambar ala Fieldwire. Anotasi disimpan di localStorage per denah
-// (bukan di Firestore) sehingga skema database tidak berubah.
+// Alat gambar ala Fieldwire.
 export type Tool = 'select' | 'pin' | 'asset' | 'pen' | 'shape' | 'text' | 'measure'
 export type PenVariant = 'freehand' | 'line' | 'arrow'
 export type ShapeVariant =
@@ -22,6 +24,9 @@ interface BaseAnnotation {
   id: string
   color: string
   createdAt: number
+  // Pembuat anotasi (kosong untuk anotasi lama yang dipindahkan dari perangkat)
+  createdBy?: string
+  createdByName?: string
 }
 
 export interface FreehandAnnotation extends BaseAnnotation {
@@ -84,43 +89,136 @@ function readAnnotations(projectId?: string, planId?: string): Annotation[] {
   }
 }
 
+// Anotasi disimpan di Firestore (projects/{p}/plans/{plan}/annotations) supaya
+// terlihat oleh semua anggota proyek. Kalau koleksi itu tidak bisa dibaca
+// (firestore.rules lama belum punya aturannya), hook ini jatuh kembali ke
+// localStorage per perangkat seperti versi sebelumnya, jadi alat gambar tetap jalan.
 export function useAnnotations(projectId?: string, planId?: string) {
-  const [annotations, setAnnotations] = useState<Annotation[]>(() =>
-    readAnnotations(projectId, planId),
-  )
+  const { user } = useAuth()
+  const [local, setLocal] = useState<Annotation[]>(() => readAnnotations(projectId, planId))
+  // null = belum tersambung / mode lokal
+  const [remote, setRemote] = useState<Annotation[] | null>(null)
+  // Perubahan posisi saat digeser: tampil langsung, ditulis ke server setelah berhenti
+  const [overrides, setOverrides] = useState<Record<string, Partial<Annotation>>>({})
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const flushed = useRef<Set<string>>(new Set())
+  const pendingMoves = useRef<Record<string, Partial<Annotation>>>({})
+  const migrated = useRef(false)
 
   useEffect(() => {
-    setAnnotations(readAnnotations(projectId, planId))
+    setLocal(readAnnotations(projectId, planId))
+    setRemote(null)
+    setOverrides({})
+    migrated.current = false
+    if (!projectId || !planId) return
+    const col = collection(db, 'projects', projectId, 'plans', planId, 'annotations')
+    return onSnapshot(
+      query(col, orderBy('createdAt', 'asc')),
+      (snap) => {
+        const docs = snap.docs.map((d) => ({ ...(d.data() as Annotation), id: d.id }))
+        setRemote(docs)
+        if (flushed.current.size) {
+          const done = flushed.current
+          flushed.current = new Set()
+          setOverrides((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !done.has(id))))
+        }
+        // Pindahkan anotasi lama dari perangkat ini ke server, sekali, dan hanya
+        // setelah server memastikan koleksinya bisa diakses (bukan dari cache).
+        if (!migrated.current && !snap.metadata.fromCache) {
+          migrated.current = true
+          const existing = new Set(docs.map((d) => d.id))
+          const mine = readAnnotations(projectId, planId).filter((a) => !existing.has(a.id))
+          if (mine.length) {
+            Promise.all(mine.map((a) => setDoc(doc(col, a.id), toFirestore(a))))
+              .then(() => {
+                localStorage.removeItem(storageKey(projectId, planId))
+                setLocal([])
+              })
+              .catch((err) => console.error('Gagal memindahkan anotasi lokal:', err))
+          }
+        }
+      },
+      (err) => {
+        console.warn('Anotasi tidak bisa disinkronkan, memakai penyimpanan lokal:', err.code)
+        setRemote(null)
+      },
+    )
   }, [projectId, planId])
 
+  const synced = remote !== null
   useEffect(() => {
-    if (!projectId || !planId) return
+    if (!projectId || !planId || synced) return
     try {
-      localStorage.setItem(storageKey(projectId, planId), JSON.stringify(annotations))
+      localStorage.setItem(storageKey(projectId, planId), JSON.stringify(local))
     } catch {
       // localStorage penuh — anotasi tetap tampil selama sesi berjalan
     }
-  }, [annotations, projectId, planId])
+  }, [local, projectId, planId, synced])
 
-  const addAnnotation = useCallback((annotation: Annotation) => {
-    setAnnotations((prev) => [...prev, annotation])
-  }, [])
+  const annotations = useMemo(
+    () => (remote ? remote.map((a) => (overrides[a.id] ? ({ ...a, ...overrides[a.id] } as Annotation) : a)) : local),
+    [remote, overrides, local],
+  )
 
-  const updateAnnotation = useCallback((id: string, data: Partial<Annotation>) => {
-    setAnnotations((prev) =>
-      prev.map((a) => (a.id === id ? ({ ...a, ...data } as Annotation) : a)),
-    )
-  }, [])
+  const docRef = useCallback(
+    (id: string) => doc(db, 'projects', projectId!, 'plans', planId!, 'annotations', id),
+    [projectId, planId],
+  )
+  const uid = user?.uid
+  const email = user?.email ?? ''
 
-  const removeAnnotation = useCallback((id: string) => {
-    setAnnotations((prev) => prev.filter((a) => a.id !== id))
-  }, [])
+  const addAnnotation = useCallback(
+    (annotation: Annotation) => {
+      if (!synced) return setLocal((prev) => [...prev, annotation])
+      setDoc(docRef(annotation.id), toFirestore({ ...annotation, createdBy: uid, createdByName: email })).catch((err) =>
+        console.error('Gagal menyimpan anotasi:', err),
+      )
+    },
+    [synced, docRef, uid, email],
+  )
 
+  const updateAnnotation = useCallback(
+    (id: string, data: Partial<Annotation>) => {
+      if (!synced) {
+        return setLocal((prev) => prev.map((a) => (a.id === id ? ({ ...a, ...data } as Annotation) : a)))
+      }
+      const merged = { ...pendingMoves.current[id], ...data }
+      pendingMoves.current[id] = merged
+      setOverrides((prev) => ({ ...prev, [id]: merged }))
+      clearTimeout(timers.current[id])
+      timers.current[id] = setTimeout(() => {
+        delete timers.current[id]
+        delete pendingMoves.current[id]
+        flushed.current.add(id)
+        updateDoc(docRef(id), toFirestore(merged)).catch((err) => console.error('Gagal menggeser anotasi:', err))
+      }, 400)
+    },
+    [synced, docRef],
+  )
+
+  const removeAnnotation = useCallback(
+    (id: string) => {
+      if (!synced) return setLocal((prev) => prev.filter((a) => a.id !== id))
+      deleteDoc(docRef(id)).catch((err) => console.error('Gagal menghapus anotasi:', err))
+    },
+    [synced, docRef],
+  )
+
+  // Urungkan = hapus anotasi terakhir milik pengguna ini (bukan milik anggota lain)
+  const undoTarget = remote
+    ? [...remote].reverse().find((a) => !a.createdBy || a.createdBy === uid)
+    : local[local.length - 1]
+  const undoId = undoTarget?.id
   const undo = useCallback(() => {
-    setAnnotations((prev) => prev.slice(0, -1))
-  }, [])
+    if (undoId) removeAnnotation(undoId)
+  }, [undoId, removeAnnotation])
 
-  return { annotations, addAnnotation, updateAnnotation, removeAnnotation, undo }
+  return { annotations, addAnnotation, updateAnnotation, removeAnnotation, undo, canUndo: !!undoId, synced }
+}
+
+// Firestore menolak nilai undefined
+function toFirestore<T extends object>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
 }
 
 export function newAnnotationId(): string {
@@ -128,7 +226,6 @@ export function newAnnotationId(): string {
 }
 
 // Kalibrasi skala: berapa piksel gambar = berapa meter di lapangan.
-// Disimpan per denah di localStorage, bukan di Firestore.
 export interface Calibration {
   pixels: number // jarak garis kalibrasi dalam piksel gambar
   meters: number // panjang asli garis tersebut dalam meter
@@ -137,8 +234,11 @@ export interface Calibration {
 const calibrationKey = (projectId: string, planId: string) =>
   `site-survey-calibration:${projectId}:${planId}`
 
-export function useCalibration(projectId?: string, planId?: string) {
-  const [calibration, setCalibrationState] = useState<Calibration | null>(() => {
+// `remote` = field calibration di dokumen denah (undefined selama denah belum termuat).
+// Nilai di server menang; nilai lokal lama dinaikkan ke server sekali supaya
+// kalibrasi yang sudah dibuat di perangkat ini ikut terlihat anggota lain.
+export function useCalibration(projectId?: string, planId?: string, remote?: Calibration | null, planLoaded = false) {
+  const [local, setLocal] = useState<Calibration | null>(() => {
     if (!projectId || !planId) return null
     try {
       const raw = localStorage.getItem(calibrationKey(projectId, planId))
@@ -148,9 +248,27 @@ export function useCalibration(projectId?: string, planId?: string) {
     }
   })
 
+  const save = useCallback(
+    (value: Calibration | null) => {
+      if (!projectId || !planId) return
+      updateDoc(doc(db, 'projects', projectId, 'plans', planId), { calibration: value }).catch((err) =>
+        console.error('Gagal menyimpan kalibrasi:', err),
+      )
+    },
+    [projectId, planId],
+  )
+
+  const hasRemote = !!remote
+  useEffect(() => {
+    if (planLoaded && !hasRemote && local) save(local)
+    // Hanya sekali saat denah termuat
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planLoaded])
+
   const setCalibration = useCallback(
     (value: Calibration | null) => {
-      setCalibrationState(value)
+      setLocal(value)
+      save(value)
       if (!projectId || !planId) return
       try {
         if (value) localStorage.setItem(calibrationKey(projectId, planId), JSON.stringify(value))
@@ -159,9 +277,11 @@ export function useCalibration(projectId?: string, planId?: string) {
         // localStorage penuh — kalibrasi tetap berlaku selama sesi berjalan
       }
     },
-    [projectId, planId],
+    [projectId, planId, save],
   )
 
+  // remote === null berarti kalibrasi sengaja dihapus oleh seseorang
+  const calibration = planLoaded && remote !== undefined ? remote : local
   return { calibration, setCalibration }
 }
 

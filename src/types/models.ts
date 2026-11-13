@@ -25,6 +25,22 @@ export interface Plan {
   createdAt: number
   // Keterangan lantai (mis. "Ground Floor", "Lantai 2"); dipakai untuk rekap Excel per lantai
   floor?: string
+  // Nomor revisi gambar yang sedang tampil (denah lama tanpa field ini = revisi 1)
+  revision?: number
+  // Gambar revisi-revisi sebelumnya, untuk dibandingkan dengan yang sekarang
+  revisions?: PlanRevision[]
+  // Kalibrasi skala (piksel gambar per meter), dipakai bersama semua anggota
+  calibration?: { pixels: number; meters: number } | null
+}
+
+export interface PlanRevision {
+  revision: number
+  imagePath: string
+  imageURL: string
+  imageWidth: number
+  imageHeight: number
+  replacedAt: number
+  replacedByName: string
 }
 
 export interface Pin {
@@ -46,6 +62,14 @@ export interface Pin {
   // Pengedit terakhir. Kosong untuk pin yang belum diubah sejak field ini ada
   updatedBy?: string
   updatedByName?: string
+  // Foto selain foto utama (photoURL)
+  extraPhotos?: PinPhoto[]
+  // Ukuran yang diambil di lapangan (tinggi plafon, lebar bukaan, ...)
+  measurements?: Measurement[]
+  // Khusus temuan: 'deviation' = kondisi lapangan beda dengan gambar
+  findingType?: FindingType
+  // Khusus aset: rencana tindakan saat renovasi
+  action?: AssetAction | ''
   kind?: PinKind
   // Field khusus pin aset
   assetType?: string
@@ -59,6 +83,22 @@ export interface Pin {
   countPhotoURL?: string | null
   localCountPhotoPending?: boolean
 }
+
+export interface PinPhoto {
+  url: string
+  path: string
+}
+
+export type MeasurementUnit = 'mm' | 'cm' | 'm'
+export interface Measurement {
+  label: string
+  value: number
+  unit: MeasurementUnit
+}
+
+export type FindingType = 'general' | 'deviation'
+export type AssetAction = 'keep' | 'relocate' | 'demolish' | 'replace'
+export const ASSET_ACTIONS: AssetAction[] = ['keep', 'relocate', 'demolish', 'replace']
 
 export interface CountPoint {
   // Titik tengah objek, dinormalisasi 0..1
@@ -87,6 +127,10 @@ export type PinUpdate = Partial<
     | 'countPhotoPath'
     | 'countPhotoURL'
     | 'localCountPhotoPending'
+    | 'extraPhotos'
+    | 'measurements'
+    | 'findingType'
+    | 'action'
   >
 >
 

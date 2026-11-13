@@ -68,6 +68,11 @@ service cloud.firestore {
         match /pins/{pinId} {
           allow read, write: if isProjectMember(projectId) || isAdmin();
         }
+
+        // Coretan/anotasi di atas denah, dipakai bersama semua anggota proyek
+        match /annotations/{annotationId} {
+          allow read, write: if isProjectMember(projectId) || isAdmin();
+        }
       }
 
       match /tasks/{taskId} {

@@ -14,3 +14,18 @@ body {
 .dark body, .dark #root {
   background-color: #0f172a;
 }
+
+/* Laporan cetak: biarkan konten mengalir ke banyak halaman dan pertahankan warna pin */
+@media print {
+  html, body, #root {
+    height: auto;
+    background: #fff !important;
+  }
+  .report {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  @page {
+    margin: 12mm;
+  }
+}
