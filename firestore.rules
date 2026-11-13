@@ -49,6 +49,32 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Pustaka standar (NFPA, SNI, ...) dipakai bersama oleh semua pengguna aktif.
+    match /standards/{standardId} {
+      allow read: if isActive();
+      allow create: if isActive() && request.resource.data.uploadedBy == request.auth.uid;
+      allow delete: if isAdmin() ||
+        (isActive() && resource.data.uploadedBy == request.auth.uid);
+    }
+
+    // Penghitung pemakaian AI harian per pengguna, ditulis oleh /api/count-objects
+    // atas nama pengguna (lihat api/_lib/aiQuota.ts). Aturan ini memaksa hitungan
+    // hanya bisa naik satu per satu, mulai lagi dari 1 hanya saat hari berganti
+    // (hari = hari UTC menurut jam server), dan berhenti di batas harian.
+    match /aiUsage/{uid} {
+      allow read: if isAdmin() || (isActive() && request.auth.uid == uid);
+      allow create, update: if isActive() && request.auth.uid == uid &&
+        request.resource.data.keys().hasOnly(['day', 'count']) &&
+        request.resource.data.day == request.time.toMillis() / 86400000 &&
+        request.resource.data.count is int &&
+        request.resource.data.count <= 100 &&
+        (
+          (resource != null && resource.data.day == request.resource.data.day)
+            ? request.resource.data.count == resource.data.count + 1
+            : request.resource.data.count == 1
+        );
+    }
+
     match /projects/{projectId} {
       allow read, update, delete: if isActive() &&
         (isAdmin() || request.auth.uid in resource.data.get('memberUids', []));

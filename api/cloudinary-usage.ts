@@ -6,7 +6,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const denied = await requireUser(req, { admin: true })
-    if (denied) return res.status(denied.status).json({ error: denied.error })
+    if ('error' in denied) return res.status(denied.status).json({ error: denied.error })
   } catch (e) {
     return res.status(504).json({ error: `Gagal memverifikasi login: ${e instanceof Error ? e.message : String(e)}` })
   }

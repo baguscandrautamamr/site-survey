@@ -38,10 +38,13 @@ export async function drainQueue() {
     const pending = await getAllPendingPhotos()
     for (const item of pending) {
       try {
-        const { url: photoURL, publicId: photoPath } = await uploadToCloudinary(
-          item.blob,
-          `pin-${item.pinId}-${item.fileName}`,
-        )
+        let uploaded = item.uploaded
+        if (!uploaded) {
+          const prefix = item.field === 'countPhoto' ? 'count' : 'pin'
+          uploaded = await uploadToCloudinary(item.blob, `${prefix}-${item.pinId}-${item.fileName}`)
+          await addPendingPhoto({ ...item, uploaded })
+        }
+        const { url: photoURL, publicId: photoPath } = uploaded
         await updateDoc(
           doc(db, 'projects', item.projectId, 'plans', item.planId, 'pins', item.pinId),
           item.field === 'countPhoto'
@@ -61,6 +64,12 @@ export async function drainQueue() {
         await deletePendingPhoto(item.id)
       } catch (err) {
         console.error('Failed to sync queued photo', item.id, err)
+        // Pin sudah dihapus atau akses dicabut: mencoba lagi tidak akan pernah
+        // berhasil, jadi buang dari antrean daripada mengulang selamanya.
+        const code = (err as { code?: string }).code
+        if (code === 'not-found' || code === 'permission-denied') {
+          await deletePendingPhoto(item.id).catch(() => {})
+        }
       }
     }
   } finally {

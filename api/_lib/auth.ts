@@ -15,6 +15,16 @@ export interface AuthFailure {
   error: string
 }
 
+export interface AuthedUser {
+  uid: string
+  idToken: string
+}
+
+// URL dokumen Firestore (REST), mis. firestoreDocUrl('aiUsage', uid)
+export function firestoreDocUrl(...segments: string[]) {
+  return `${firestoreBase}/v1/projects/${encodeURIComponent(firebaseProjectId ?? '')}/databases/(default)/documents/${segments.map(encodeURIComponent).join('/')}`
+}
+
 // Verifies the caller's Firebase ID token and loads their profile. No service
 // account is needed: the token is validated by the Identity Toolkit API, and
 // the profile is read through the Firestore REST API as the caller, so
@@ -23,7 +33,7 @@ export interface AuthFailure {
 export async function requireUser(
   req: VercelRequest,
   { admin = false }: { admin?: boolean } = {},
-): Promise<AuthFailure | null> {
+): Promise<AuthFailure | AuthedUser> {
   if (!firebaseApiKey || !firebaseProjectId) {
     return { status: 503, error: 'Env var VITE_FIREBASE_API_KEY / VITE_FIREBASE_PROJECT_ID belum diisi di Vercel.' }
   }
@@ -41,15 +51,14 @@ export async function requireUser(
   const account = users?.[0]
   if (!account || account.disabled) return { status: 401, error: 'Sesi tidak valid, silakan login ulang.' }
 
-  const profile = await fetch(
-    `${firestoreBase}/v1/projects/${encodeURIComponent(firebaseProjectId)}/databases/(default)/documents/users/${encodeURIComponent(account.localId)}`,
-    { headers: { Authorization: `Bearer ${idToken}` } },
-  )
+  const profile = await fetch(firestoreDocUrl('users', account.localId), {
+    headers: { Authorization: `Bearer ${idToken}` },
+  })
   if (!profile.ok) return { status: 403, error: 'Akun tidak aktif.' }
   if (admin) {
     const data = (await profile.json()) as { fields?: { role?: { stringValue?: string } } }
     if (data.fields?.role?.stringValue !== 'admin') return { status: 403, error: 'Hanya admin yang boleh mengakses.' }
   }
 
-  return null
+  return { uid: account.localId, idToken }
 }
