@@ -20,7 +20,7 @@ export interface AuthedUser {
   idToken: string
 }
 
-// URL dokumen Firestore (REST), mis. firestoreDocUrl('aiUsage', uid)
+// URL dokumen Firestore (REST), mis. firestoreDocUrl('users', uid)
 export function firestoreDocUrl(...segments: string[]) {
   return `${firestoreBase}/v1/projects/${encodeURIComponent(firebaseProjectId ?? '')}/databases/(default)/documents/${segments.map(encodeURIComponent).join('/')}`
 }
