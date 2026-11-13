@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { downloadProjectForOffline } from '../sync/downloadForOffline'
 import { usePlans } from './usePlans'
 import { usePlanFolders, type PlanFolder } from './planFolders'
 import PlanUploadButton from './PlanUploadButton'
@@ -87,6 +88,29 @@ export default function PlanListPage() {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
 
   const [exporting, setExporting] = useState<string | null>(null)
+  const [offlineProgress, setOfflineProgress] = useState<string | null>(null)
+  const navigate = useNavigate()
+
+  const onDownloadOffline = async () => {
+    if (!projectId || offlineProgress) return
+    setOfflineProgress(t('offline.starting'))
+    try {
+      const result = await downloadProjectForOffline(projectId, plans, (done, total) =>
+        setOfflineProgress(t('offline.progress', { done, total })),
+      )
+      window.alert(
+        !result.storageActive
+          ? t('offline.notActive')
+          : result.failed
+            ? t('offline.partial', { ok: result.total - result.failed, total: result.total })
+            : t('offline.done', { total: result.total }),
+      )
+    } catch (e) {
+      window.alert(t('offline.failed', { error: (e as Error).message }))
+    } finally {
+      setOfflineProgress(null)
+    }
+  }
 
   const closeMenu = () => setOpenMenu(null)
 
@@ -214,8 +238,8 @@ export default function PlanListPage() {
 
   const uploadInto =
     (folderId: string | null) =>
-    async (name: string, file: File, floor: string) => {
-      const newId = await uploadPlan(name, file, floor)
+    async (name: string, file: File, floor: string, page: number) => {
+      const newId = await uploadPlan(name, file, floor, page)
       if (newId && folderId) movePlans([newId], folderId)
     }
 
@@ -306,8 +330,24 @@ export default function PlanListPage() {
               <span className="block font-medium">{t('export.withoutPhotos')}</span>
               <span className="block text-xs text-slate-400">{t('export.withoutPhotosHelp')}</span>
             </MenuItem>
+            <MenuItem onClick={() => navigate(`/projects/${projectId}/report`)}>
+              <span className="block font-medium">{t('report.menu')}</span>
+              <span className="block text-xs text-slate-400">{t('report.menuHelp')}</span>
+            </MenuItem>
           </Dropdown>
         </div>
+
+        <button
+          type="button"
+          onClick={onDownloadOffline}
+          disabled={!!offlineProgress || plans.length === 0}
+          className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 10.5a3.8 3.8 0 0 1-.5 7.5M12 11v8M9 16l3 3 3-3" />
+          </svg>
+          {offlineProgress ?? t('offline.button')}
+        </button>
 
         <button
           type="button"

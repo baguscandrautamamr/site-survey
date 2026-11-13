@@ -1,8 +1,9 @@
 import imageCompression from 'browser-image-compression'
+import { arrayUnion } from 'firebase/firestore'
 import { uploadToCloudinary } from '../../lib/cloudinary'
 import { queuePhoto } from './syncManager'
 import type { PinPhotoField } from './pendingPhotosDb'
-import type { Pin, PinUpdate } from '../../types/models'
+import type { Pin, PinPhoto, PinUpdate } from '../../types/models'
 
 export function compressPhoto(file: File) {
   return imageCompression(file, {
@@ -43,11 +44,14 @@ export async function savePinPhoto(
   }
 
   try {
-    const prefix = field === 'countPhoto' ? 'count' : 'pin'
+    const prefix = field === 'countPhoto' ? 'count' : field === 'extra' ? 'extra' : 'pin'
     const { url, publicId } = await uploadToCloudinary(blob, `${prefix}-${pin.id}-${fileName}`)
     await onUpdate(
       pin.id,
-      field === 'countPhoto'
+      field === 'extra'
+        ? // arrayUnion supaya dua foto yang diunggah berdekatan tidak saling menimpa
+          { extraPhotos: arrayUnion({ url, path: publicId }) as unknown as PinPhoto[] }
+        : field === 'countPhoto'
         ? { countPhotoPath: publicId, countPhotoURL: url, localCountPhotoPending: false }
         : { photoPath: publicId, photoURL: url, localPhotoPending: false },
     )

@@ -1,4 +1,4 @@
-import { doc, serverTimestamp, updateDoc } from 'firebase/firestore'
+import { arrayUnion, doc, serverTimestamp, updateDoc } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import { uploadToCloudinary } from '../../lib/cloudinary'
 import {
@@ -40,14 +40,20 @@ export async function drainQueue() {
       try {
         let uploaded = item.uploaded
         if (!uploaded) {
-          const prefix = item.field === 'countPhoto' ? 'count' : 'pin'
+          const prefix = item.field === 'countPhoto' ? 'count' : item.field === 'extra' ? 'extra' : 'pin'
           uploaded = await uploadToCloudinary(item.blob, `${prefix}-${item.pinId}-${item.fileName}`)
           await addPendingPhoto({ ...item, uploaded })
         }
         const { url: photoURL, publicId: photoPath } = uploaded
         await updateDoc(
           doc(db, 'projects', item.projectId, 'plans', item.planId, 'pins', item.pinId),
-          item.field === 'countPhoto'
+          item.field === 'extra'
+            ? {
+                extraPhotos: arrayUnion({ url: photoURL, path: photoPath }),
+                localPhotoPending: false,
+                updatedAt: serverTimestamp(),
+              }
+            : item.field === 'countPhoto'
             ? {
                 countPhotoPath: photoPath,
                 countPhotoURL: photoURL,

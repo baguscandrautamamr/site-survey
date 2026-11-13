@@ -15,7 +15,7 @@ export default function AppShell() {
   return (
     <div className="flex min-h-full flex-col bg-white dark:bg-slate-900">
       <SyncStatusBanner />
-      <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+      <header className="flex items-center justify-between border-b print:hidden border-slate-200 px-4 py-3 dark:border-slate-700">
         <Link to="/" className="text-lg font-bold text-slate-900 dark:text-white">
           {t('app.name')}
         </Link>

@@ -4,7 +4,18 @@ import { useAssetTypes } from './useAssetTypes'
 import CountPhotoModal, { type CountResultDraft } from './CountPhotoModal'
 import { useTranslation } from '../../i18n/LanguageContext'
 import { PinAuthorInfo } from '../pins/pinAuthors'
-import type { CountPoint, CountSource, Pin, PinUpdate } from '../../types/models'
+import PinPhotos from '../pins/PinPhotos'
+import MeasurementsEditor, { cleanMeasurements } from '../pins/MeasurementsEditor'
+import {
+  ASSET_ACTIONS,
+  type AssetAction,
+  type CountPoint,
+  type CountSource,
+  type Measurement,
+  type Pin,
+  type PinPhoto,
+  type PinUpdate,
+} from '../../types/models'
 
 interface Props {
   pin: Pin
@@ -31,8 +42,14 @@ function isEmptyAsset(a: {
   countPhotoURL?: string | null
   localPhotoPending?: boolean
   localCountPhotoPending?: boolean
+  extraPhotos?: PinPhoto[]
+  measurements?: Measurement[]
+  action?: AssetAction | ''
 }) {
   return (
+    !a.extraPhotos?.length &&
+    !a.measurements?.length &&
+    !a.action &&
     !a.assetType &&
     !a.quantity &&
     !a.notes?.trim() &&
@@ -110,6 +127,9 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
   const [damaged, setDamaged] = useState(pin.damaged ?? 0)
   const [missing, setMissing] = useState(pin.missing ?? 0)
   const [notes, setNotes] = useState(pin.notes)
+  const [action, setAction] = useState<AssetAction | ''>(pin.action ?? '')
+  const [measurements, setMeasurements] = useState<Measurement[]>(pin.measurements ?? [])
+  const [extraBusy, setExtraBusy] = useState(false)
   const [countSource, setCountSource] = useState<CountSource>(pin.countSource ?? 'manual')
   const [countPoints, setCountPoints] = useState<CountPoint[]>(pin.countPoints ?? [])
   // Foto hitung baru yang belum disimpan
@@ -185,7 +205,7 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
   // Tutup tanpa menyimpan. Pin aset yang masih kosong ikut dihapus supaya tidak
   // tertinggal sebagai penanda "0" di denah dan baris kosong di Excel.
   const onCancel = () => {
-    if (isEmptyAsset(pin)) {
+    if (isEmptyAsset(pin) && !extraBusy) {
       onDelete(pin.id).catch((err) => console.error('Gagal menghapus aset kosong:', err))
     }
     onClose()
@@ -193,7 +213,10 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
 
   const onSave = () => {
     const nothingEntered =
-      isEmptyAsset({ ...pin, assetType, quantity, notes }) && !countPhoto && !evidence
+      isEmptyAsset({ ...pin, assetType, quantity, notes, action, measurements: cleanMeasurements(measurements) }) &&
+      !countPhoto &&
+      !evidence &&
+      !extraBusy
     if (nothingEntered) {
       onCancel()
       return
@@ -207,6 +230,8 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
       damaged,
       missing,
       notes,
+      action,
+      measurements: cleanMeasurements(measurements),
       countSource,
       countPoints,
     }).catch((err) => console.error('Gagal menyimpan aset:', err))
@@ -354,6 +379,36 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
               rows={2}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 focus:border-slate-900 focus:outline-none dark:border-slate-600 dark:bg-slate-700 dark:text-white"
             />
+          </Section>
+
+          <Section title={t('assetForm.action')}>
+            <div className="grid grid-cols-2 gap-2">
+              {ASSET_ACTIONS.map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  // Ketuk lagi pilihan yang aktif untuk mengosongkannya
+                  onClick={() => setAction(action === a ? '' : a)}
+                  aria-pressed={action === a}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                    action === a
+                      ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-200 dark:bg-slate-200 dark:text-slate-900'
+                      : 'border-slate-300 text-slate-700 dark:border-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  {t(`assetAction.${a}`)}
+                </button>
+              ))}
+            </div>
+          </Section>
+
+          <Section title={t('measure.title')}>
+            <MeasurementsEditor value={measurements} onChange={setMeasurements} />
+          </Section>
+
+          <Section title={t('pinPhotos.extraTitle')}>
+            <PinPhotos pin={pin} onUpdate={onUpdate} onBusyChange={setExtraBusy} />
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('pinPhotos.extraHelp')}</p>
           </Section>
 
           <div className="flex gap-2">

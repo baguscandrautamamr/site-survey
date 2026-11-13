@@ -30,6 +30,11 @@ export default function PinMarker({ pin, categoryColor, zoomScale = 1, onSelect 
         aria-label={t('planViewer.assetLabel', { type: pin.assetType || '-', count: pin.quantity ?? 0 })}
       >
         {pin.quantity ?? 0}
+        {pin.action && pin.action !== 'keep' && (
+          <span aria-hidden className="ml-0.5 text-[10px] font-semibold uppercase text-amber-300">
+            {t(`assetAction.short.${pin.action}`)}
+          </span>
+        )}
         {(pin.localPhotoPending || pin.localCountPhotoPending) && (
           <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-amber-400" />
         )}
@@ -54,6 +59,12 @@ export default function PinMarker({ pin, categoryColor, zoomScale = 1, onSelect 
       }}
       aria-label={t('planViewer.pinLabel', { category: pin.category, status: t(`status.${pin.status}`) })}
     >
+      {/* Tanda "tidak sama dengan" = kondisi lapangan beda dengan gambar */}
+      {pin.findingType === 'deviation' && (
+        <span aria-hidden className="text-sm font-black leading-none text-white [text-shadow:0_0_2px_#000]">
+          &ne;
+        </span>
+      )}
       {pin.localPhotoPending && (
         <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-amber-400" />
       )}

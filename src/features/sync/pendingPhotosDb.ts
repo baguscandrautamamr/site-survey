@@ -16,7 +16,8 @@ export interface PendingPhotoRecord {
   uploaded?: { url: string; publicId: string }
 }
 
-export type PinPhotoField = 'photo' | 'countPhoto'
+// 'extra' = foto tambahan, ditambahkan ke array extraPhotos
+export type PinPhotoField = 'photo' | 'countPhoto' | 'extra'
 
 const DB_NAME = 'survey-pending-photos'
 const STORE_NAME = 'photos'

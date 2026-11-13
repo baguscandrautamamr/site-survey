@@ -3,6 +3,7 @@ import type { Workbook, Worksheet } from 'exceljs'
 import { db } from '../../firebase/config'
 import { compareFloors } from '../plans/floors'
 import { toMs } from '../tasks/useProjectPins'
+import { formatMeasurements } from '../pins/MeasurementsEditor'
 import type { TranslationKey } from '../../i18n/translations'
 import type { Pin, Plan } from '../../types/models'
 
@@ -249,6 +250,10 @@ function addAssetRecapSheet(wb: Workbook, name: string, floors: FloorData[], t: 
   ws.views = [{ state: 'frozen', ySplit: 1 }]
 }
 
+function extraPhotoLinks(pin: Pin) {
+  return (pin.extraPhotos ?? []).map((p) => p.url).join('\n')
+}
+
 function addFloorSheet(wb: Workbook, name: string, f: FloorData, t: T, photos: PhotoSlot[] | null) {
   const ws = wb.addWorksheet(name)
   ws.getCell('A1').value = f.label
@@ -267,6 +272,9 @@ function addFloorSheet(wb: Workbook, name: string, f: FloorData, t: T, photos: P
     toMs(pin.createdAt) ? new Date(toMs(pin.createdAt)) : null,
     photoCell(pin.photoURL, pin.localPhotoPending, t),
     pin.updatedByName ?? '',
+    t(`findingType.${pin.findingType ?? 'general'}`),
+    formatMeasurements(pin.measurements),
+    extraPhotoLinks(pin),
   ])
   f.findings.forEach(({ pin }, i) => {
     if (photos && pin.photoURL) photos.push({ ws, row: 6 + i, col: 8, url: pin.photoURL })
@@ -284,6 +292,9 @@ function addFloorSheet(wb: Workbook, name: string, f: FloorData, t: T, photos: P
       t('export.date'),
       t('pinForm.photo'),
       t('export.updatedBy'),
+      t('pinForm.findingType'),
+      t('measure.title'),
+      t('pinPhotos.extraTitle'),
     ],
     findingRows.length ? findingRows : [[t('export.noFindings')]],
   )
@@ -306,6 +317,9 @@ function addFloorSheet(wb: Workbook, name: string, f: FloorData, t: T, photos: P
     photoCell(pin.photoURL, pin.localPhotoPending, t),
     photoCell(pin.countPhotoURL, pin.localCountPhotoPending, t),
     pin.updatedByName ?? '',
+    pin.action ? t(`assetAction.${pin.action}`) : '',
+    formatMeasurements(pin.measurements),
+    extraPhotoLinks(pin),
   ])
   f.assets.forEach(({ pin }, i) => {
     if (!photos) return
@@ -330,11 +344,14 @@ function addFloorSheet(wb: Workbook, name: string, f: FloorData, t: T, photos: P
       t('assetForm.evidencePhoto'),
       t('export.countPhoto'),
       t('export.updatedBy'),
+      t('assetForm.action'),
+      t('measure.title'),
+      t('pinPhotos.extraTitle'),
     ],
     assetRows.length ? assetRows : [[t('export.noAssets')]],
   )
 
-  const widths = [6, 22, 20, 12, 40, 22, 17, 14, 40, 22, 17, 14, 14, 22]
+  const widths = [6, 22, 20, 12, 40, 22, 17, 14, 40, 22, 17, 14, 14, 22, 22, 36, 36]
   ws.columns.forEach((col, i) => (col.width = widths[i] ?? 14))
 }
 

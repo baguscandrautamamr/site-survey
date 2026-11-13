@@ -119,6 +119,16 @@ export default function PunchListPage() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
                   {pin.kind === 'asset' ? `${pin.assetType || '-'} × ${pin.quantity ?? 0}` : pin.category}
+                  {pin.kind === 'asset' && pin.action && (
+                    <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                      {t(`assetAction.${pin.action}`)}
+                    </span>
+                  )}
+                  {pin.findingType === 'deviation' && (
+                    <span className="ml-1.5 rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900/40 dark:text-purple-200">
+                      {t('findingType.deviation')}
+                    </span>
+                  )}
                 </p>
                 <p className="truncate text-sm text-slate-500 dark:text-slate-400">
                   {pin.kind === 'asset'

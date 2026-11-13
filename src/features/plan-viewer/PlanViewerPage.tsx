@@ -12,6 +12,7 @@ import ToolSidebar from './ToolSidebar'
 import AnnotationLayer from './AnnotationLayer'
 import TextBoxModal from './TextBoxModal'
 import CalibrationModal from './CalibrationModal'
+import PlanRevisionPanel from './PlanRevisionPanel'
 import {
   useAnnotations,
   useCalibration,
@@ -34,7 +35,10 @@ export default function PlanViewerPage() {
   const navigate = useNavigate()
   const [plan, setPlan] = useState<Plan | null>(null)
   const { pins, createPin, updatePin, deletePin } = usePins(projectId, planId)
-  const { plans } = usePlans(projectId)
+  const { plans, uploading, uploadRevision } = usePlans(projectId)
+  const [revisionOpen, setRevisionOpen] = useState(false)
+  const [compareRevision, setCompareRevision] = useState<number | null>(null)
+  const [compareOpacity, setCompareOpacity] = useState(0.5)
   const { categories } = useCategories()
   const { t } = useTranslation()
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null)
@@ -57,8 +61,8 @@ export default function PlanViewerPage() {
   const [textRect, setTextRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   const [calibrating, setCalibrating] = useState(false)
   const [pendingCalibrationPx, setPendingCalibrationPx] = useState<number | null>(null)
-  const { annotations, addAnnotation, updateAnnotation, removeAnnotation, undo } = useAnnotations(projectId, planId)
-  const { calibration, setCalibration } = useCalibration(projectId, planId)
+  const { annotations, addAnnotation, updateAnnotation, removeAnnotation, undo, canUndo } = useAnnotations(projectId, planId)
+  const { calibration, setCalibration } = useCalibration(projectId, planId, plan?.calibration, !!plan)
 
   const isDrawingTool = DRAWING_TOOLS.includes(tool)
 
@@ -131,6 +135,7 @@ export default function PlanViewerPage() {
   }
 
   const selectedPin = pins.find((p) => p.id === selectedPinId) ?? null
+  const comparedImage = plan?.revisions?.find((r) => r.revision === compareRevision) ?? null
 
   if (!plan) {
     return <div className="p-6 text-sm text-slate-500">{t('planViewer.loading')}</div>
@@ -151,6 +156,18 @@ export default function PlanViewerPage() {
           </Link>
           <h1 className="truncate text-base font-semibold text-slate-900 dark:text-white">{plan.name}</h1>
         </div>
+        <button
+          type="button"
+          onClick={() => setRevisionOpen((v) => !v)}
+          aria-expanded={revisionOpen}
+          className={`ml-auto mr-2 shrink-0 rounded-lg border px-3 py-1.5 text-sm font-medium ${
+            revisionOpen || comparedImage
+              ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
+              : 'border-slate-300 text-slate-700 dark:border-slate-600 dark:text-slate-300'
+          }`}
+        >
+          {t('revision.label', { revision: plan.revision ?? 1 })}
+        </button>
         <Link
           to={`/projects/${projectId}/plans/${planId}/punchlist`}
           className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 dark:border-slate-600 dark:text-slate-300"
@@ -158,6 +175,22 @@ export default function PlanViewerPage() {
           {t('planViewer.punchList', { count: pins.length })}
         </Link>
       </div>
+
+      {revisionOpen && (
+        <PlanRevisionPanel
+          plan={plan}
+          uploading={uploading}
+          onUpload={async (file, page) => {
+            await uploadRevision(plan, file, page)
+            // Langsung bandingkan dengan gambar yang baru saja diganti
+            setCompareRevision(plan.revision ?? 1)
+          }}
+          compareRevision={comparedImage ? compareRevision : null}
+          onCompareChange={setCompareRevision}
+          opacity={compareOpacity}
+          onOpacityChange={setCompareOpacity}
+        />
+      )}
 
       <div className="flex items-center gap-3 overflow-x-auto border-b border-slate-200 px-4 py-1.5 dark:border-slate-700">
         <CreatorFilter creators={creators} value={activeCreator} onChange={setCreatorFilter} className="shrink-0" />
@@ -176,7 +209,7 @@ export default function PlanViewerPage() {
           shapeVariant={shapeVariant}
           color={color}
           colorOpen={colorOpen}
-          canUndo={annotations.length > 0}
+          canUndo={canUndo}
           calibrating={calibrating}
           calibrationLabel={
             calibration
@@ -222,6 +255,15 @@ export default function PlanViewerPage() {
           <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }} contentStyle={{ width: '100%' }}>
             <div ref={containerRef} onClick={onContainerClick} className="relative w-full">
               <img src={plan.imageURL} alt={plan.name} draggable={false} className="block w-full select-none" />
+              {comparedImage && (
+                <img
+                  src={comparedImage.imageURL}
+                  alt={t('revision.label', { revision: comparedImage.revision })}
+                  draggable={false}
+                  className="pointer-events-none absolute inset-0 h-full w-full select-none"
+                  style={{ opacity: compareOpacity }}
+                />
+              )}
               <AnnotationLayer
                 annotations={annotations}
                 tool={tool}

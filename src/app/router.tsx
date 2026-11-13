@@ -4,6 +4,7 @@ import ProjectListPage from '../features/projects/ProjectListPage'
 import ProjectDetailPage from '../features/projects/ProjectDetailPage'
 import PlanViewerPage from '../features/plan-viewer/PlanViewerPage'
 import PunchListPage from '../features/punch-list/PunchListPage'
+import ProjectReportPage from '../features/report/ProjectReportPage'
 import StandardsListPage from '../features/standards/StandardsListPage'
 import AuthGuard from './AuthGuard'
 import AdminGuard from '../features/admin/AdminGuard'
@@ -23,6 +24,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <ProjectListPage /> },
       { path: 'projects/:projectId', element: <ProjectDetailPage /> },
+      { path: 'projects/:projectId/report', element: <ProjectReportPage /> },
       { path: 'projects/:projectId/plans/:planId', element: <PlanViewerPage /> },
       { path: 'projects/:projectId/plans/:planId/punchlist', element: <PunchListPage /> },
       { path: 'standards', element: <StandardsListPage /> },
