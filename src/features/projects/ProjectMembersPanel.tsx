@@ -9,7 +9,7 @@ export default function ProjectMembersPanel() {
   const { user } = useAuth()
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { members, loading, error, addMember, removeMember } = useProjectMembers(projectId)
+  const { members, candidates, loading, error, addMember, addMemberByUid, removeMember } = useProjectMembers(projectId)
   const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
@@ -28,6 +28,25 @@ export default function ProjectMembersPanel() {
       } else {
         setMessage({ kind: 'error', text: t(result === 'notFound' ? 'members.notFound' : 'members.alreadyMember', { email: value }) })
       }
+    } catch (err) {
+      setMessage({ kind: 'error', text: t('members.failed', { error: err instanceof Error ? err.message : String(err) }) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Daftar akun terdaftar, disaring oleh teks yang sedang diketik
+  const search = email.trim().toLowerCase()
+  const suggestions = candidates.filter((c) => c.email.includes(search))
+
+  const onPick = async (candidate: { uid: string; email: string }) => {
+    if (busy) return
+    setBusy(true)
+    setMessage(null)
+    try {
+      await addMemberByUid(candidate.uid)
+      setEmail('')
+      setMessage({ kind: 'ok', text: t('members.added', { email: candidate.email }) })
     } catch (err) {
       setMessage({ kind: 'error', text: t('members.failed', { error: err instanceof Error ? err.message : String(err) }) })
     } finally {
@@ -85,6 +104,9 @@ export default function ProjectMembersPanel() {
         </p>
       )}
 
+      <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
+        {t('members.currentHeading', { count: members.length })}
+      </h2>
       {error ? (
         <p className="text-sm text-red-600">{t('members.failed', { error })}</p>
       ) : loading ? (
@@ -112,6 +134,34 @@ export default function ProjectMembersPanel() {
                   {m.uid === user?.uid ? t('members.leave') : t('members.remove')}
                 </button>
               )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h2 className="mb-2 mt-6 text-sm font-semibold text-slate-700 dark:text-slate-300">
+        {t('members.registeredHeading', { count: suggestions.length })}
+      </h2>
+      {suggestions.length === 0 ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          {search ? t('members.noMatch') : t('members.noCandidates')}
+        </p>
+      ) : (
+        <ul className="max-h-80 space-y-2 overflow-y-auto">
+          {suggestions.map((c) => (
+            <li
+              key={c.uid}
+              className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800"
+            >
+              <p className="min-w-0 flex-1 truncate text-sm text-slate-900 dark:text-white">{c.email}</p>
+              <button
+                type="button"
+                onClick={() => onPick(c)}
+                disabled={busy}
+                className="shrink-0 rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700 disabled:opacity-50 dark:border-blue-700 dark:text-blue-300"
+              >
+                + {t('members.add')}
+              </button>
             </li>
           ))}
         </ul>

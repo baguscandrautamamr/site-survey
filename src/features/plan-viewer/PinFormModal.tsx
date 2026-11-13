@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { compressPhoto, savePinPhoto } from '../sync/savePinPhoto'
 import { useCategories } from '../categories/useCategories'
 import { useTranslation } from '../../i18n/LanguageContext'
+import { PinAuthorInfo } from '../pins/pinAuthors'
 import type { Pin, PinStatus, PinUpdate } from '../../types/models'
 
 interface Props {
@@ -68,6 +69,8 @@ export default function PinFormModal({ pin, onClose, onUpdate, onDelete }: Props
           </button>
         </div>
 
+        <PinAuthorInfo pin={pin} />
+
         <div className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">{t('pinForm.status')}</label>
@@ -77,6 +80,7 @@ export default function PinFormModal({ pin, onClose, onUpdate, onDelete }: Props
                   key={s}
                   type="button"
                   onClick={() => {
+                    if (s === status) return
                     setStatus(s)
                     saveTextFields({ status: s })
                   }}
@@ -116,7 +120,10 @@ export default function PinFormModal({ pin, onClose, onUpdate, onDelete }: Props
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              onBlur={() => saveTextFields({ notes })}
+              onBlur={() => {
+                // Jangan catat sebagai "diubah" kalau isinya tidak berubah
+                if (notes !== pin.notes) saveTextFields({ notes })
+              }}
               rows={3}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 focus:border-slate-900 focus:outline-none dark:border-slate-600 dark:bg-slate-700 dark:text-white"
             />

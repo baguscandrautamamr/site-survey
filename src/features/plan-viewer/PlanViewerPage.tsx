@@ -23,6 +23,8 @@ import {
 import { usePlans } from '../plans/usePlans'
 import { colorForCategory, useCategories } from '../categories/useCategories'
 import { useTranslation } from '../../i18n/LanguageContext'
+import { useAuth } from '../auth/useAuth'
+import { ALL_CREATORS, CreatorFilter, useCreatorFilter } from '../pins/pinAuthors'
 import type { Plan } from '../../types/models'
 
 const DRAWING_TOOLS: Tool[] = ['pen', 'shape', 'text', 'measure']
@@ -37,6 +39,9 @@ export default function PlanViewerPage() {
   const { t } = useTranslation()
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null)
   const [dropping, setDropping] = useState(false)
+  const { user } = useAuth()
+  const [creatorFilter, setCreatorFilter] = useState(ALL_CREATORS)
+  const { creators, active: activeCreator, visiblePins } = useCreatorFilter(pins, creatorFilter)
   const [zoomScale, setZoomScale] = useState(1)
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<HTMLDivElement>(null)
@@ -110,6 +115,8 @@ export default function PlanViewerPage() {
     try {
       const pinId = await createPin(x, y, tool === 'asset' ? 'asset' : 'finding')
       setSelectedPinId(pinId)
+      // Pin baru milik pengguna ini; jangan sampai tersembunyi oleh filter orang lain
+      if (activeCreator !== ALL_CREATORS && activeCreator !== user?.uid) setCreatorFilter(ALL_CREATORS)
     } finally {
       setDropping(false)
     }
@@ -152,7 +159,8 @@ export default function PlanViewerPage() {
         </Link>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto border-b border-slate-200 px-4 py-1.5 dark:border-slate-700">
+      <div className="flex items-center gap-3 overflow-x-auto border-b border-slate-200 px-4 py-1.5 dark:border-slate-700">
+        <CreatorFilter creators={creators} value={activeCreator} onChange={setCreatorFilter} className="shrink-0" />
         {categories.map((c) => (
           <span key={c.id} className="flex shrink-0 items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.color }} />
@@ -232,7 +240,7 @@ export default function PlanViewerPage() {
                 onTextRect={setTextRect}
                 onCalibrate={setPendingCalibrationPx}
               />
-              {pins.map((pin) => (
+              {visiblePins.map((pin) => (
                 <PinMarker
                   key={pin.id}
                   pin={pin}

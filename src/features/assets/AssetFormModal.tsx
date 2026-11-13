@@ -3,6 +3,7 @@ import { compressPhoto, savePinPhoto } from '../sync/savePinPhoto'
 import { useAssetTypes } from './useAssetTypes'
 import CountPhotoModal, { type CountResultDraft } from './CountPhotoModal'
 import { useTranslation } from '../../i18n/LanguageContext'
+import { PinAuthorInfo } from '../pins/pinAuthors'
 import type { CountPoint, CountSource, Pin, PinUpdate } from '../../types/models'
 
 interface Props {
@@ -242,6 +243,8 @@ export default function AssetFormModal({ pin, onClose, onUpdate, onDelete }: Pro
             &times;
           </button>
         </div>
+
+        <PinAuthorInfo pin={pin} />
 
         <div className="space-y-3">
           <Section title={t('assetForm.assetType')}>

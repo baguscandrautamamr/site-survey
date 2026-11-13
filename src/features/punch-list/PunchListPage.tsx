@@ -4,6 +4,7 @@ import { usePins } from '../plan-viewer/usePins'
 import { STATUS_COLORS } from '../plan-viewer/usePins'
 import PinFormModal from '../plan-viewer/PinFormModal'
 import AssetFormModal from '../assets/AssetFormModal'
+import { ALL_CREATORS, CreatorFilter, useCreatorFilter } from '../pins/pinAuthors'
 import StatusFilterChips, { type StatusFilter } from './StatusFilterChips'
 import { useTranslation } from '../../i18n/LanguageContext'
 import type { PinStatus } from '../../types/models'
@@ -15,11 +16,14 @@ export default function PunchListPage() {
   const [filter, setFilter] = useState<StatusFilter>('all')
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null)
 
+  const [creatorFilter, setCreatorFilter] = useState(ALL_CREATORS)
+  const { creators, active: activeCreator, visiblePins } = useCreatorFilter(pins, creatorFilter)
+
   const counts = useMemo(() => {
-    const c: Record<StatusFilter, number> = { all: pins.length, open: 0, in_progress: 0, done: 0 }
-    for (const pin of pins) c[pin.status]++
+    const c: Record<StatusFilter, number> = { all: visiblePins.length, open: 0, in_progress: 0, done: 0 }
+    for (const pin of visiblePins) c[pin.status]++
     return c
-  }, [pins])
+  }, [visiblePins])
 
   // Rekap aset per jenis: total, baik, rusak, hilang
   const assetSummary = useMemo(() => {
@@ -36,7 +40,7 @@ export default function PunchListPage() {
     return [...byType.entries()].sort(([a], [b]) => a.localeCompare(b))
   }, [pins])
 
-  const filtered = filter === 'all' ? pins : pins.filter((p) => p.status === filter)
+  const filtered = filter === 'all' ? visiblePins : visiblePins.filter((p) => p.status === filter)
   const selectedPin = pins.find((p) => p.id === selectedPinId) ?? null
 
   const onDelete = (pinId: string) => {
@@ -89,6 +93,7 @@ export default function PunchListPage() {
 
       <div className="mb-4">
         <StatusFilterChips value={filter} onChange={setFilter} counts={counts} />
+        <CreatorFilter creators={creators} value={activeCreator} onChange={setCreatorFilter} className="mt-2" />
       </div>
 
       {filtered.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">{t('punchList.empty')}</p>}
@@ -124,7 +129,11 @@ export default function PunchListPage() {
                       })
                     : pin.notes || t('punchList.noNotes')}
                 </p>
-                <p className="text-xs text-slate-400 dark:text-slate-500">{pin.createdByName}</p>
+                <p className="truncate text-xs text-slate-400 dark:text-slate-500">
+                  {pin.createdByName}
+                  {pin.updatedByName && pin.updatedByName !== pin.createdByName &&
+                    ` · ${t('pinAuthor.updatedBy', { name: pin.updatedByName })}`}
+                </p>
               </div>
             </button>
             <span

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import { usePlans } from '../plans/usePlans'
+import { useAuth } from '../auth/useAuth'
 import type { Pin } from '../../types/models'
 
 // createdAt bisa berupa number atau Firestore Timestamp saat runtime
@@ -16,6 +17,7 @@ export function toMs(v: unknown): number {
 // Kumpulkan semua pin (temuan) dari seluruh denah dalam satu proyek,
 // supaya papan tugas bisa menampilkannya seperti task berlokasi di Fieldwire.
 export function useProjectPins(projectId: string | undefined) {
+  const { user } = useAuth()
   const { plans, loading: plansLoading } = usePlans(projectId)
   const [pinsByPlan, setPinsByPlan] = useState<Record<string, Pin[]>>({})
   const planIdsKey = plans.map((p) => p.id).join(',')
@@ -61,6 +63,7 @@ export function useProjectPins(projectId: string | undefined) {
     await updateDoc(doc(db, 'projects', projectId, 'plans', planId, 'pins', pinId), {
       ...data,
       updatedAt: serverTimestamp(),
+      ...(user && { updatedBy: user.uid, updatedByName: user.email ?? '' }),
     })
   }
 
